@@ -1,4 +1,4 @@
-# # %%
+# %%
 from asyncore import loop
 import numpy as np
 from pathlib import Path
@@ -23,7 +23,7 @@ human_model = smplx.SMPL(
 )
 # get mesh and joints from the SMPL model
 mesh = human_model()
-# print(mesh)
+joints = mesh.joints
 # %%
 import pytorch3d, torch, imageio
 # visulize use pytorch3d
@@ -76,11 +76,7 @@ viz_mesh = pytorch3d.structures.Meshes(
     faces=faces, 
     textures=textures)
 viz_mesh = viz_mesh.to(device)
-# check if variable is on GPU
-ic(viz_mesh.device)
-ic(textures.device)
-ic(faces.device)
-ic(vertices.device)
+
 # %%
 
 # render an image
@@ -106,3 +102,4 @@ imageio.mimsave(VIZ_OUTPUT/"example.gif", rends, fps=24, loop=0)
 
 
 # %%
+joints.shape

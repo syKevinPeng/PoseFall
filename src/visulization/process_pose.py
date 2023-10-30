@@ -1,11 +1,10 @@
 # %%
-from asyncore import loop
 import numpy as np
 from pathlib import Path
 from icecream import ic
 from scipy.datasets import face
 # %%
-DATAPATH = '../data/falling_dataset.npz'
+DATAPATH = '/home/siyuan/research/PoseFall/data/falling_dataset.npz'
 VIZ_OUTPUT = '/home/siyuan/research/PoseFall/src/visulization/viz_output'
 DATAPATH = Path(DATAPATH)
 VIZ_OUTPUT = Path(VIZ_OUTPUT)
@@ -64,6 +63,7 @@ SMPL Config
 '''
 # %%
 import smplx
+# from smplx.joint_names import  JOINT_NAMES, SMPL_JOINT_NAMES 
 model_folder= '/home/siyuan/research/PoseFall/data/SMPL_cleaned'
 human_model = smplx.SMPL(
     model_path = model_folder,
@@ -71,7 +71,19 @@ human_model = smplx.SMPL(
     body_pose= None,
     create_betas=True,
     betas=None,
+    gender='male'
 )
 # get mesh and joints from the SMPL model
-mesh = human_model()
-print(mesh)
+smplx_output = human_model()
+joints = smplx_output.joints
+joints = joints[:24] # remove the extra joints "The remaining 21 points are vertices selected to match some 2D keypoint annotations
+
+# %%
+from smplx.joint_names import SMPLH_JOINT_NAMES
+from smplx.joint_names import SMPL_JOINT_NAMES 
+
+# select SMPL joints from SMPLH joint
+# SMPL_joint_index = [SMPLH_JOINT_NAMES.index(name) if name in for name in SMPL_JOINT_NAMES]
+# SMPL_joint_index = np.array(SMPL_joint_index)
+# SMPL_joint_index
+# %%
