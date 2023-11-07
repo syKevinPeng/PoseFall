@@ -3,35 +3,63 @@ import numpy as np
 from pathlib import Path
 from icecream import ic
 from scipy.datasets import face
+from icecream import ic
+import torch
 # %%
-DATAPATH = '/home/siyuan/research/PoseFall/data/falling_dataset.npz'
+DATAPATH = '/home/siyuan/research/PoseFall/data/falling_dataset_Cam1.npz'
 VIZ_OUTPUT = '/home/siyuan/research/PoseFall/src/visulization/viz_output'
 DATAPATH = Path(DATAPATH)
 VIZ_OUTPUT = Path(VIZ_OUTPUT)
 if DATAPATH.is_file():
-    dataset = np.load(DATAPATH, allow_pickle=True)['falling_dataset'][()]
+    dataset_pos = np.load(DATAPATH, allow_pickle=True)['falling_dataset_pos'][()]
+    dataset_rot = np.load(DATAPATH, allow_pickle=True)['falling_dataset_rot'][()]
 else:
     raise FileNotFoundError('Data file not found.')
 
 if not VIZ_OUTPUT.is_dir():
     VIZ_OUTPUT.mkdir()
 # %%
-# second trial:
-point_trace = dataset[2] # frame, num_joints, 3
-num_frame, num_joints, _ = point_trace.shape
-SMPL_num_joints = 23
-# add two new point to trace
-point_trace = np.concatenate([point_trace, np.zeros((num_frame, 3, 3))], axis=1) # jaw, left hand, right hand]
+dataset_pos.keys()
+# %%
+# Trial 3
+joint_locs = dataset_pos["Trial3"] # frame, num_joints, 3
+joint_rots = dataset_rot["Trial3"] # frame, num_joints, 3, 3
+# num_frame, num_joints, _ = joint_loc.shape
 
-# recorder the joint index
-joint_index = np.array([14, 7, 2, 5, 18, 19, 3,1, 20, 16, 12, 21, 13, 8, 11, 23, 10, 22, 15, 4,9, 6, 24, 25, 17 ])
+# # get one frame
+# frame = joint_loc[0, :, :]
+# import matplotlib.pyplot as plt
+# from mpl_toolkits.mplot3d import Axes3D
+
+# fig = plt.figure( figsize=(10, 10))
+# ax = fig.add_subplot(111, projection='3d')
+# ax.view_init(elev=0, azim=-90)
+# ax.set_xlim(-0.5, 0.2)
+# ax.set_ylim(0, 1)
+# joints = frame
+# ic(joints.shape)
+# for i in range(joints.shape[0]):
+#     ax.scatter(joints[i, 0], joints[i, 1], joints[i, 2], c='r', marker='o')
+#     ax.text(joints[i, 0] + 0.02, joints[i, 1], joints[i, 2], str(i+1), fontsize = 10)
+
+
+# # recorder the joint index
+joint_index = np.array([16,3,9, 24, 18, 10, 5, 15, 4, 14, 13, 1, 19, 22, 20, 7, 17, 2, 21, 12, 8, 11, 6, 23])
+# ic(joint_index.shape)
+# ic(sorted(joint_index))
+
 joint_index = joint_index - 1
+#%%
+# point trace shape: (frame, num_joints, 3)
+ic(joint_locs.shape)
+ic(joint_rots.shape)
+# # record index
+joint_locs = joint_locs[:, joint_index, :]
+joint_rots = joint_rots[:, joint_index, :]
 
-# record index
-point_trace = point_trace[:, joint_index, :]
-
-
-
+# get one frame
+joint_loc = joint_locs[0, :, :]
+joint_rot = joint_rots[0, :, :]
 
 # %%
 '''
@@ -63,27 +91,46 @@ SMPL Config
 '''
 # %%
 import smplx
+import pickle
 # from smplx.joint_names import  JOINT_NAMES, SMPL_JOINT_NAMES 
 model_folder= '/home/siyuan/research/PoseFall/data/SMPL_cleaned'
+male_model = "/home/siyuan/research/PoseFall/data/SMPL_cleaned/SMPL_MALE.pkl"
+# get kinematic tree
+class Struct(object):
+    def __init__(self, **kwargs):
+        for key, val in kwargs.items():
+            setattr(self, key, val)
+
+with open(male_model, 'rb') as smpl_file:
+    data_struct = Struct(**pickle.load(smpl_file,
+                                                   encoding='latin1'))
+parents = (data_struct.kintree_table[0]).astype(np.int32)
+parents = torch.tensor(parents)
+parents[0] = -1
+
+
 human_model = smplx.SMPL(
     model_path = model_folder,
     create_body_pose=True,
     body_pose= None,
     create_betas=True,
     betas=None,
-    gender='male'
+    gender='male',
 )
-# get mesh and joints from the SMPL model
-smplx_output = human_model()
+output = human_model()
+curr_joint_ori  = output.get('body_pose').detach().cpu().reshape(-1, 3)
+new_joint_ori = joint_rot.reshape(1, -1)
+print(f'new_joint_ori: {new_joint_ori.shape}')
+
+# this_joint = joint_rot[0, :, :].flatten().reshape(1, -1)
+smplx_output = human_model(body_pose=new_joint_ori)
+
+
 joints = smplx_output.joints
 joints = joints[:24] # remove the extra joints "The remaining 21 points are vertices selected to match some 2D keypoint annotations
 
 # %%
-from smplx.joint_names import SMPLH_JOINT_NAMES
-from smplx.joint_names import SMPL_JOINT_NAMES 
+from pose_viz import viz_360
 
-# select SMPL joints from SMPLH joint
-# SMPL_joint_index = [SMPLH_JOINT_NAMES.index(name) if name in for name in SMPL_JOINT_NAMES]
-# SMPL_joint_index = np.array(SMPL_joint_index)
-# SMPL_joint_index
-# %%
+output_file = "viz_output/pose1.png"
+viz_360(output_file,human_model, smplx_output)

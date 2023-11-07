@@ -1,5 +1,4 @@
 # %%
-from asyncore import loop
 import numpy as np
 from pathlib import Path
 from icecream import ic
@@ -61,6 +60,7 @@ def get_mesh_renderer(image_size=512, lights=None, device=None):
 
 device = torch.device("cuda:0")
 vertices = mesh.vertices
+vertices = vertices.detach().cpu()
 faces = human_model.faces.astype(np.int64)
 textures = torch.ones_like(vertices)
 color = [0.7, 0.7, 1]
@@ -76,7 +76,18 @@ viz_mesh = pytorch3d.structures.Meshes(
     faces=faces, 
     textures=textures)
 viz_mesh = viz_mesh.to(device)
+# %%
+# render an xyz world axis
+vertices = torch.tensor([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=torch.float32)  
+faces = torch.tensor([[0, 1], [0, 2], [0, 3]], dtype=torch.int64) 
+textures = torch.tensor([[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=torch.float32)  
+axis_textures = pytorch3d.renderer.TexturesVertex([textures]) 
+ic(vertices.shape)
+ic(faces.shape)
+axis_mesh = pytorch3d.structures.Meshes(verts=vertices, faces=faces, textures=axis_textures)
+axis_mesh = axis_mesh.to(device)
 
+jointed_mesh = pytorch3d.structures.join_meshes_as_batch([viz_mesh, axis_mesh])
 # %%
 
 # render an image
@@ -91,7 +102,7 @@ for i in range(len(azims)):
     cameras = pytorch3d.renderer.FoVPerspectiveCameras(
         R=R, T=T, device=device, fov=60
     ).to(device)
-    rend = renderer(viz_mesh, cameras=cameras, lights=lights)
+    rend = renderer(jointed_mesh, cameras=cameras, lights=lights)
     rend = rend.cpu().numpy()[0, ..., :3]  # (B, H, W, 4) -> (H, W, 3)
     # convert to uint8
     rend = rend * 255
@@ -103,3 +114,46 @@ imageio.mimsave(VIZ_OUTPUT/"example.gif", rends, fps=24, loop=0)
 
 # %%
 joints.shape
+
+
+def viz_360(output_path, human_model, mesh):
+
+    device = torch.device("cuda:0")
+    vertices = mesh.vertices
+    vertices = vertices.detach().cpu()
+    faces = human_model.faces.astype(np.int64)
+    textures = torch.ones_like(vertices)
+    color = [0.7, 0.7, 1]
+    textures = textures * torch.tensor(color)
+    textures = pytorch3d.renderer.TexturesVertex(textures).to(device)
+
+    faces = torch.tensor(faces).to(device)
+    faces = faces.unsqueeze(0)
+    vertices = torch.tensor(vertices).to(device)
+
+    viz_mesh = pytorch3d.structures.Meshes(
+        verts=vertices, 
+        faces=faces, 
+        textures=textures)
+    viz_mesh = viz_mesh.to(device)
+
+    lights = pytorch3d.renderer.PointLights(location=[[0, 0, 3]], device=device)
+    renderer = get_mesh_renderer(image_size=512, lights=lights, device=device)
+
+    # create a 360 view
+    azims = torch.linspace(0, 360, steps=36)
+    rends = []
+    for i in range(len(azims)):
+        R, T = look_at_view_transform(dist=3.0, elev=0, azim=azims[i])
+        cameras = pytorch3d.renderer.FoVPerspectiveCameras(
+            R=R, T=T, device=device, fov=60
+        ).to(device)
+        rend = renderer(jointed_mesh, cameras=cameras, lights=lights)
+        rend = rend.cpu().numpy()[0, ..., :3]  # (B, H, W, 4) -> (H, W, 3)
+        # convert to uint8
+        rend = rend * 255
+        rends.append(rend.astype("uint8"))
+
+
+    imageio.mimsave(output_path, rends, fps=24, loop=0)
+
