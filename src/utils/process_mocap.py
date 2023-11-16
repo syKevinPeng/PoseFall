@@ -51,6 +51,7 @@ def process_mocap_data(fbx_file_path, armature_name, output_file):
 
     # Select the armature
     armature = bpy.context.scene.objects[armature_name]
+    armature_prefix = armature_name.split(':')[0]
 
     # Get the scene for frame manipulation
     scene = bpy.context.scene
@@ -79,7 +80,10 @@ def process_mocap_data(fbx_file_path, armature_name, output_file):
             row = [frame]
 
             # Iterate over each bone in the armature
-            for bone in armature.pose.bones:
+            for bone_name in Captury_boens:
+                bone_name = armature_prefix + ':' + bone_name
+                # get the boen in armature
+                bone = armature.pose.bones[bone_name]
                 # Get the local rotation 
                 local_rot_mat = convert_global_rot_to_local_rot(bone)
                 euler_rotation = local_rot_mat.to_euler()

@@ -5,6 +5,13 @@ from icecream import ic
 from scipy.datasets import face
 from icecream import ic
 import torch
+import rot_convert
+import matplotlib.pyplot as plt
+from smplx import joint_names
+joint_names = joint_names.SMPL_JOINT_NAMES 
+
+import smplx
+import pickle
 # %%
 DATAPATH = '/home/siyuan/research/PoseFall/data/falling_dataset_Cam1.npz'
 VIZ_OUTPUT = '/home/siyuan/research/PoseFall/src/visulization/viz_output'
@@ -18,80 +25,7 @@ else:
 
 if not VIZ_OUTPUT.is_dir():
     VIZ_OUTPUT.mkdir()
-# %%
-dataset_pos.keys()
-# %%
-# Trial 3
-joint_locs = dataset_pos["Trial3"] # frame, num_joints, 3
-joint_rots = dataset_rot["Trial3"] # frame, num_joints, 3, 3
-# num_frame, num_joints, _ = joint_loc.shape
 
-# # get one frame
-# frame = joint_loc[0, :, :]
-# import matplotlib.pyplot as plt
-# from mpl_toolkits.mplot3d import Axes3D
-
-# fig = plt.figure( figsize=(10, 10))
-# ax = fig.add_subplot(111, projection='3d')
-# ax.view_init(elev=0, azim=-90)
-# ax.set_xlim(-0.5, 0.2)
-# ax.set_ylim(0, 1)
-# joints = frame
-# ic(joints.shape)
-# for i in range(joints.shape[0]):
-#     ax.scatter(joints[i, 0], joints[i, 1], joints[i, 2], c='r', marker='o')
-#     ax.text(joints[i, 0] + 0.02, joints[i, 1], joints[i, 2], str(i+1), fontsize = 10)
-
-
-# # recorder the joint index
-joint_index = np.array([16,3,9, 24, 18, 10, 5, 15, 4, 14, 13, 1, 19, 22, 20, 7, 17, 2, 21, 12, 8, 11, 6, 23])
-# ic(joint_index.shape)
-# ic(sorted(joint_index))
-
-joint_index = joint_index - 1
-#%%
-# point trace shape: (frame, num_joints, 3)
-ic(joint_locs.shape)
-ic(joint_rots.shape)
-# # record index
-joint_locs = joint_locs[:, joint_index, :]
-joint_rots = joint_rots[:, joint_index, :]
-
-# get one frame
-joint_loc = joint_locs[0, :, :]
-joint_rot = joint_rots[0, :, :]
-
-# %%
-'''
-SMPL Config
-0: 'pelvis',
-1: 'left_hip',
-2: 'right_hip',
-3: 'spine1',
-4: 'left_knee',
-5: 'right_knee',
-6: 'spine2',
-7: 'left_ankle',
-8: 'right_ankle',
-9: 'spine3',
-10: 'left_foot',
-11: 'right_foot',
-12: 'neck',
-13: 'left_collar',
-14: 'right_collar',
-15: 'head',
-16: 'left_shoulder',
-17: 'right_shoulder',
-18: 'left_elbow',
-19: 'right_elbow',
-20: 'left_wrist',
-21: 'right_wrist',
-22: 'left_hand',
-23: 'right_hand'
-'''
-# %%
-import smplx
-import pickle
 # from smplx.joint_names import  JOINT_NAMES, SMPL_JOINT_NAMES 
 model_folder= '/home/siyuan/research/PoseFall/data/SMPL_cleaned'
 male_model = "/home/siyuan/research/PoseFall/data/SMPL_cleaned/SMPL_MALE.pkl"
@@ -108,6 +42,20 @@ parents = (data_struct.kintree_table[0]).astype(np.int32)
 parents = torch.tensor(parents)
 parents[0] = -1
 
+# Trial 3
+trial_sequence = "Trial18"
+joint_locs = dataset_pos[trial_sequence] # frame, num_joints, 3
+joint_rots = dataset_rot[trial_sequence] # frame, num_joints, 3, 3
+
+# # recorder the joint index
+joint_index = np.array([16,3,9, 24, 18, 10, 5, 15, 4, 14, 13, 1, 19, 22, 20, 7, 17, 2, 21, 12, 8, 11, 6, 23])
+joint_index = joint_index - 1
+# # record index
+joint_locs = joint_locs[:, joint_index, :]
+joint_rots = joint_rots[:, joint_index, :]
+# get one frame
+joint_loc = joint_locs[0, :, :]
+joint_rot = joint_rots[0, :, :]
 
 human_model = smplx.SMPL(
     model_path = model_folder,
@@ -119,18 +67,121 @@ human_model = smplx.SMPL(
 )
 output = human_model()
 curr_joint_ori  = output.get('body_pose').detach().cpu().reshape(-1, 3)
-new_joint_ori = joint_rot.reshape(1, -1)
-print(f'new_joint_ori: {new_joint_ori.shape}')
+parent_vec_list = []
+for i in range(len(joint_loc)):
+    # get the parent index
+    parent_index = parents[i]
+    # plot a line between the current joint and its parent
+    if parent_index != -1:
+        parent_vec_list.append(joint_loc[i, :] - joint_loc[parent_index, :])
+    else:
+        parent_vec_list.append(joint_loc[i, :] - [0,0,1])
+# vector_list is from parent to child (i.e. the parent vector)
+# print(parent_vec_list)
 
-# this_joint = joint_rot[0, :, :].flatten().reshape(1, -1)
-smplx_output = human_model(body_pose=new_joint_ori)
+# child_vec_list = []
+# # print(f'')
+# for i in range(len(joint_loc)):
+#     child_index = np.where(parents == i)
+#     if len(child_index) == 0 or len(child_index) > 1:
+#         child_vec_list.append([0,0,0])
+#     else:
+#         child_vec_list.append(joint_loc[child_index[0][0], :] - joint_loc[i, :])
+#     print(f'child index is {child_index}')
+# exit()
+
+# given the direction vector of the joint (vector_list), visulize the joint orientation
+fig = plt.figure(figsize=(10, 8))
+ax = fig.add_subplot(111, projection='3d')
+ax.view_init(elev=0, azim=-90, roll = 0)
+ax.set_xlim(-0.5, 0.5)
+ax.set_ylim(0, 1)
+# Plot each joint
+for joint in joint_loc:
+    ax.scatter(joint[0], joint[1], joint[2], color='blue', s=50)  # s is the size of the point
+# Plot lines for each bone
+for joint, vector in zip(joint_loc, parent_vec_list):
+    line = np.vstack((joint, joint - vector))  # stack the start and end points vertically
+    ax.plot(line[:, 0], line[:, 1], line[:, 2], color='red')
+
+for joint, rot in zip(joint_loc, joint_rot):
+    # plot the rotation
+
+    rot = rot_convert.euler_to_matrix(rot)
+    rot = rot @ np.array([0,0,0.1])
+
+    line = np.vstack((joint, joint + rot))  # stack the start and end points vertically
+    ax.plot(line[:, 0], line[:, 1], line[:, 2], color='green')
 
 
-joints = smplx_output.joints
-joints = joints[:24] # remove the extra joints "The remaining 21 points are vertices selected to match some 2D keypoint annotations
+# Set plot labels and title
+ax.set_xlabel('X Axis')
+ax.set_ylabel('Y Axis')
+ax.set_zlabel('Z Axis')
+ax.set_title('3D Joint Locations and Bone Directions')
+fig.savefig(VIZ_OUTPUT / 'joint_dir.png', dpi=200)
 
+for name , rot in zip(joint_names, joint_rot):
+    print(f'{name} rot is {rot}')
+exit()
+
+
+
+
+# # calculate the relative rotation
+# relative_joint_ori = []
+# for i in range(len(parent_vec_list)):
+#     # get the parent index
+#     parent_index = parents[i]
+#     # plot a line between the current joint and its parent
+#     if parent_index != -1:
+#         relative_joint_ori.append(rot_convert.calculate_euler_angles(parent_vec_list[i], parent_vec_list[i]))
+#     else:
+#         relative_joint_ori.append(rot_convert.calculate_euler_angles([0,0,1], parent_vec_list[i]))
+# # # convert global joint_ori to local joint_ori
+# # relative_joint_ori = rot_convert.global_to_relative_euler(new_joint_ori, parents)
+
+# relative_joint_ori = torch.tensor(relative_joint_ori, dtype=torch.float32)[1:, :] # remove the root joint
+# # calibrate the axis
+
+# test_joint_ori = relative_joint_ori
+# # test_joint_ori = torch.zeros_like(relative_joint_ori)
+# test_joint_ori[15, :] = relative_joint_ori[15, :]
+
+
+# for joint, rot in zip(joint_names[1:], np.degrees(test_joint_ori)):
+#     print(f"{joint} relative rot is {rot}\n")
+# relative_joint_ori = test_joint_ori.reshape(1, -1)
+# smplx_output = human_model(body_pose=relative_joint_ori)
+
+
+
+# joints = smplx_output.joints
+# joints = joints[:24] # remove the extra joints "The remaining 21 points are vertices selected to match some 2D keypoint annotations
+
+  
 # %%
-from pose_viz import viz_360
 
-output_file = "viz_output/pose1.png"
-viz_360(output_file,human_model, smplx_output)
+# output_file = "viz_output/pose1.png"
+# vertices = smplx_output.vertices.detach().cpu().numpy().squeeze()
+# model = human_model
+# joints =  output.joints.detach().cpu().numpy().squeeze()
+
+# from matplotlib import pyplot as plt
+# from mpl_toolkits.mplot3d import Axes3D
+# from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+# fig = plt.figure(figsize=(10, 10))
+# ax = fig.add_subplot(111, projection='3d')
+# # ax.view_init(elev=90., azim=-90., roll = 0)
+# mesh = Poly3DCollection(vertices[model.faces], alpha=0.1)
+# face_color = (1.0, 1.0, 0.9)
+# edge_color = (0, 0, 0)
+# mesh.set_edgecolor(edge_color)
+# mesh.set_facecolor(face_color)
+# ax.add_collection3d(mesh)
+# # ax.scatter(joints[:, 0], joints[:, 1], joints[:, 2], color='r')
+# joints = joints[:24, :]
+# print(f'plotting joints: {joints.shape}')
+# ax.scatter(joints[:, 0], joints[:, 1], joints[:, 2], alpha=1, marker='o', color='r', s=10)
+# plt.savefig(output_file, dpi=200)

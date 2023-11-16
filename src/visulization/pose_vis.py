@@ -130,7 +130,9 @@ def viz_360(output_path, human_model, mesh):
     faces = torch.tensor(faces).to(device)
     faces = faces.unsqueeze(0)
     vertices = torch.tensor(vertices).to(device)
-
+    print(faces.shape)
+    print(vertices.shape)
+    exit()
     viz_mesh = pytorch3d.structures.Meshes(
         verts=vertices, 
         faces=faces, 
