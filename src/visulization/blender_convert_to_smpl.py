@@ -1,8 +1,5 @@
 import bpy
-
-# actor name
-actor_name = 'Siyuan'
-
+import numpy as np
 # Mocap Joint Names
 MOCAP_JOINT_NAME = [
     # "Spine",
@@ -30,7 +27,6 @@ MOCAP_JOINT_NAME = [
     "LeftHandEE",
     "RightHandEE",
 ]
-MOCAP_JOINT_NAME = [ f'{actor_name}:{name}' for name in MOCAP_JOINT_NAME]
 # SMPL Joint Names
 SMPL_JOINT_NAMES = [
     # "pelvis",
@@ -131,7 +127,7 @@ def set_bone_to_global_orientation(armature, bone, world_rotation):
         # Now, bone_rotation_local is a 4x4 transformation matrix in the parent's local space
         # To apply this to the bone, you need to extract the rotation component
         local_rotation = bone_rotation_local.to_euler("XYZ")
-        print(f'relative rotation for bone {bone}: {local_rotation}')
+        # print(f'relative rotation for bone {bone}: {local_rotation}')
         # Apply this local rotation to the bone
         bone.rotation_euler = local_rotation
     else:
@@ -140,13 +136,13 @@ def set_bone_to_global_orientation(armature, bone, world_rotation):
         bone.rotation_euler = world_rotation
 
 
-def update_smpl_rotation():
+def update_smpl_rotation(smpl_armature_name, mocap_armature_name, mocap_joint_names, smpl_joint_names):
     # Setup up Mocap 
-    mocap_armature = bpy.context.scene.objects['Siyuan:Hips']
+    mocap_armature = bpy.context.scene.objects[mocap_armature_name]
     # setup up Smplex
-    smplx_armature = bpy.context.scene.objects['SMPL-female']
+    smplx_armature = bpy.context.scene.objects[smpl_armature_name]
     # calculate for all bones:
-    for mocap_bone_name, smplx_bone_name in zip(MOCAP_JOINT_NAME, SMPL_JOINT_NAMES):
+    for mocap_bone_name, smplx_bone_name in zip(mocap_joint_names, smpl_joint_names):
         mocap_bone = mocap_armature.pose.bones[mocap_bone_name]
         smplx_bone = smplx_armature.pose.bones[smplx_bone_name]
         # get the global transformation matrix of mocap bone
@@ -157,27 +153,60 @@ def update_smpl_rotation():
         # set the global rotation of smplx bone
         set_bone_to_global_orientation(smplx_armature, smplx_bone, transformed_smpl_global_rot.to_euler('XYZ'))
 
-def reset_mocap_armature():
+def reset_armature(armature_name):
     # set all bones's rotation to zero
-    mocap=bpy.context.scene.objects['Siyuan:Hips']
+    mocap=bpy.context.scene.objects[armature_name]
     for bone in mocap.pose.bones:
         bone.rotation_mode = 'XYZ'
         bone.rotation_euler = (0,0,0)
 
-def reset_smpl_armature():
-    # set all bones's rotation to zero
-    mocap=bpy.context.scene.objects['SMPL-female']
-    for bone in mocap.pose.bones:
-        bone.rotation_mode = 'XYZ'
-        bone.rotation_euler = (0,0,0)
+def get_curr_smpl_rot(smpl_armature_name):
+    # get the current smpl bone rotation
+    smplx_armature = bpy.context.scene.objects[smpl_armature_name]
+    curr_smpl_rot = []
+    for smplx_bone_name in SMPL_JOINT_NAMES:
+        smplx_bone = smplx_armature.pose.bones[smplx_bone_name]
+        curr_smpl_rot.append(get_global_rot(smplx_armature, smplx_bone).to_euler('XYZ'))
+    return curr_smpl_rot
 
+def reset_blender():
+    bpy.ops.wm.read_homefile(use_empty=True)
 
-def main():
-    # load the mocap armature fbx
-    mocap_fbx = "E:\Downloads\Siyuan.fbx"
-    bpy.ops.import_scene.fbx(filepath=mocap_fbx, automatic_bone_orientation = True)
+scene = bpy.data.scenes['Scene']
+# load the mocap armature fbx
+mocap_fbx = "E:\Downloads\Siyuan.fbx"
+actor_name = mocap_fbx.split('\\')[-1].split('.')[0]
+print(f'--- loading {actor_name} ---')
+MOCAP_JOINT_NAME = [ f'{actor_name}:{name}' for name in MOCAP_JOINT_NAME]
 
-    # load the smpl armature from add-on
-    bpy.data.window_managers["WinMan"].smpl_tool.smpl_gender = 'female'
-    bpy.ops.scene.smpl_add_gender()
+bpy.ops.import_scene.fbx(filepath=mocap_fbx, automatic_bone_orientation = True)
+print(f'--- {actor_name} loaded ---')
+# load the smpl armature from add-on
+bpy.data.window_managers["WinMan"].smpl_tool.smpl_gender = 'female'
+bpy.ops.scene.smpl_add_gender()
+print(f'--- smpl armature loaded ---')
+
+# Setup up Mocap 
+mocap_armature = bpy.context.scene.objects[f'{actor_name}:Hips']
+# setup up Smplex
+smplx_armature = bpy.context.scene.objects['SMPL-female']
+
+# loop through all the frames
+for frame in range(1, scene.frame_end):
+    scene.frame_current = frame
+    print(f'--- processing frame {frame} ---')
+    updated_flag = False
+    curr_smplx_param = np.array(get_curr_smpl_rot(smplx_armature.name))
+    while(not updated_flag):
+        print(f'looping-----')
+        update_smpl_rotation(smplx_armature.name, mocap_armature.name, MOCAP_JOINT_NAME, SMPL_JOINT_NAMES)
+        updated_smplx_param = np.array(get_curr_smpl_rot(smplx_armature.name))
+        print(f'curr_smplx_param: {curr_smplx_param}')
+        print(f'updated_smplx_param: {updated_smplx_param}')
+        if np.array_equal(updated_smplx_param, curr_smplx_param):
+            updated_flag = True
+        else:
+            curr_smplx_param = updated_smplx_param
+
+    break
 
