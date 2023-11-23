@@ -5,7 +5,7 @@ from icecream import ic
 from scipy.datasets import face
 from icecream import ic
 import torch
-import rot_convert
+import visulization.blender_convert_to_smpl as blender_convert_to_smpl
 import matplotlib.pyplot as plt
 from smplx import joint_names
 joint_names = joint_names.SMPL_JOINT_NAMES 
@@ -107,7 +107,7 @@ for joint, vector in zip(joint_loc, parent_vec_list):
 for joint, rot in zip(joint_loc, joint_rot):
     # plot the rotation
 
-    rot = rot_convert.euler_to_matrix(rot)
+    rot = blender_convert_to_smpl.euler_to_matrix(rot)
     rot = rot @ np.array([0,0,0.1])
 
     line = np.vstack((joint, joint + rot))  # stack the start and end points vertically

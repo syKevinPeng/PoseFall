@@ -1,8 +1,10 @@
+from time import sleep
 import bpy
 import numpy as np
+from mathutils import Euler, Matrix
 # Mocap Joint Names
-MOCAP_JOINT_NAME = [
-    # "Spine",
+MOCAP_JOINT_NAMES = [
+    "Spine",
     "LeftUpLeg",
     "RightUpLeg",
     "Spine1",
@@ -29,7 +31,7 @@ MOCAP_JOINT_NAME = [
 ]
 # SMPL Joint Names
 SMPL_JOINT_NAMES = [
-    # "pelvis",
+    "Pelvis",
     "L_Hip",
     "R_Hip",
     "Spine1",
@@ -56,23 +58,23 @@ SMPL_JOINT_NAMES = [
 ]
 
 def get_global_rot(armature, bone):
-    # '''
-    # get global rotation of a bone
-    # output: global rotation of the bone
-    # @param armature: armature object
-    # @param bone: bone object that you need to get global rotation
-    # '''
+    """
+    get global rotation of a bone
+    output: global rotation of the bone
+    @param armature: armature object
+    @param bone: bone object that you need to get global rotation
+    """
     global_mat = armature.matrix_world @ bone.matrix
     return global_mat
 
 def calculate_bone_trans_matrix(mocap_armature_name, smplx_armature_name, mocap_bone_name, smplx_bone_name):
-    # '''
-    # calculate the ration matrix needed to aligh the rotation of mocap bone to smplx bone
-    # @param mocap_armature_name: mocap armature name
-    # @param smplx_armature_name: smplx armature name
-    # @param mocap_bone_name: mocap bone name
-    # @param smplx_bone_name: smplx bone name
-    # '''
+    """
+    calculate the ration matrix needed to aligh the rotation of mocap bone to smplx bone
+    @param mocap_armature_name: mocap armature name
+    @param smplx_armature_name: smplx armature name
+    @param mocap_bone_name: mocap bone name
+    @param smplx_bone_name: smplx bone name
+    """
     mocap_armature = bpy.context.scene.objects[mocap_armature_name]
     smplx_armature = bpy.context.scene.objects[smplx_armature_name]
     mocap_bone = mocap_armature.pose.bones[mocap_bone_name]
@@ -91,13 +93,13 @@ def calculate_bone_trans_matrix(mocap_armature_name, smplx_armature_name, mocap_
 
 
 def calculate_bone_trans_matrix(mocap_armature_name, smplx_armature_name, mocap_bone_name, smplx_bone_name):
-    # '''
-    # calculate the ration matrix needed to aligh the rotation of mocap bone to smplx bone
-    # @param mocap_armature_name: mocap armature name
-    # @param smplx_armature_name: smplx armature name
-    # @param mocap_bone_name: mocap bone name
-    # @param smplx_bone_name: smplx bone name
-    # '''
+    """
+    calculate the ration matrix needed to aligh the rotation of mocap bone to smplx bone
+    @param mocap_armature_name: mocap armature name
+    @param smplx_armature_name: smplx armature name
+    @param mocap_bone_name: mocap bone name
+    @param smplx_bone_name: smplx bone name
+    """
     mocap_armature = bpy.context.scene.objects[mocap_armature_name]
     smplx_armature = bpy.context.scene.objects[smplx_armature_name]
     mocap_bone = mocap_armature.pose.bones[mocap_bone_name]
@@ -114,7 +116,13 @@ def calculate_bone_trans_matrix(mocap_armature_name, smplx_armature_name, mocap_
     mocap_to_smplx_rot_matrix = mocap_bone_rest_rot_matrix_world_inv @ smplx_bone_rest_rot_matrix_world
     return mocap_to_smplx_rot_matrix
 
-def set_bone_to_global_orientation(armature, bone, world_rotation):
+def set_all_global_armature_rot(armature, bone, world_rotation):
+    """
+    Set the global rotation of a bone in an armature.
+    @param armature: The armature object.
+    @param bone: The bone object.
+    @param world_rotation: The global rotation (as Euler angles) to set.
+    """
     # set rotation mode of the bone to euler:
     bone.rotation_mode = 'XYZ'
     if bone.parent:
@@ -134,7 +142,80 @@ def set_bone_to_global_orientation(armature, bone, world_rotation):
         # If the bone has no parent, then its local space is the same as its world space
         # So we can just apply the world rotation directly
         bone.rotation_euler = world_rotation
+    bpy.context.view_layer.update()
+    return bone
 
+def get_all_global_armature_rot(smpl_armature_name):
+    """
+    Get the current global rotations of all bones in an SMPLX armature.
+
+    @param smpl_armature_name: The name of the armature.
+    @return: A list of global rotations (as Euler angles) for each bone in the SMPLX armature.
+    """
+    # get the current smpl bone rotation
+    smplx_armature = bpy.context.scene.objects[smpl_armature_name]
+    curr_smpl_rot = []
+    for smplx_bone_name in SMPL_JOINT_NAMES:
+        smplx_bone = smplx_armature.pose.bones[smplx_bone_name]
+        curr_smpl_rot.append(get_global_rot(smplx_armature, smplx_bone).to_euler('XYZ'))
+    return curr_smpl_rot
+
+    
+def get_all_local_armature_rot(armature_name, joint_list):
+    '''
+    Get the current local rotations of all bones in an SMPLX armature.
+
+    @param armature_name: The name of the armature.
+    @param joint_list: A list of joint names.
+    @return: A list of local rotations (as Euler angles) for each bone in the SMPLX armature.
+    '''
+    # get the current smpl bone rotation
+    armature = bpy.context.scene.objects[armature_name]
+    joint_local_rot = []
+    for bone_name in joint_list:
+        bone = armature.pose.bones[bone_name]
+        # get global rotation
+        global_rot_mat = get_global_rot(armature, bone).to_3x3()
+        if bone.parent:
+            # Get the parent's global rotation matrix
+            parent_global_rot_mat = get_global_rot(armature, bone.parent).to_3x3()
+            # Calculate the inverse of the parent's global rotation matrix
+            parent_global_rot_mat_inv = parent_global_rot_mat.inverted()
+            # Compute the bone's local rotation (relative to its parent)
+            local_rot_mat = parent_global_rot_mat_inv @ global_rot_mat
+            local_rot_euler = local_rot_mat.to_euler('XYZ')
+        else:
+            # If the bone has no parent, its local rotation is the same as its global rotation
+            local_rot_euler = global_rot_mat.to_euler('XYZ')
+        joint_local_rot.append(local_rot_euler)
+    return joint_local_rot
+
+def set_all_local_armature_rot(armature_name, joint_list, joint_local_rot):
+    '''
+    Set the local rotations of all bones in an SMPLX armature.
+
+    @param armature_name: The name of the armature.
+    @param joint_list: A list of joint names.
+    @param joint_local_rot: A list of local rotations (as Euler angles) for each bone in the SMPLX armature.
+    '''
+    # get the current smpl bone rotation
+    armature = bpy.context.scene.objects[armature_name]
+    for bone_name, local_rot in zip(joint_list, joint_local_rot):
+        bone = armature.pose.bones[bone_name]
+        # set rotation mode of the bone to euler:
+        bone.rotation_mode = 'XYZ'
+        if bone.parent:
+            # Calculate the global rotation matrix from the local rotation and parent's global rotation
+            parent_global_rot_mat = get_global_rot(armature, bone.parent).to_3x3()
+            local_rot_mat = Euler(local_rot, 'XYZ').to_matrix()
+            global_rot_mat = parent_global_rot_mat @ local_rot_mat
+            # Convert global rotation matrix to Euler angles and set it as the bone's rotation
+            bone.rotation_euler = global_rot_mat.to_euler('XYZ')
+        else:
+            # If the bone has no parent, set the local rotation directly
+            bone.rotation_euler = Euler(local_rot, 'XYZ')
+    # Update the view layer to reflect changes
+    bpy.context.view_layer.update()
 
 def update_smpl_rotation(smpl_armature_name, mocap_armature_name, mocap_joint_names, smpl_joint_names):
     # Setup up Mocap 
@@ -151,33 +232,34 @@ def update_smpl_rotation(smpl_armature_name, mocap_armature_name, mocap_joint_na
         mocap_bone_global_rot = get_global_rot(mocap_armature, mocap_bone).to_3x3()
         transformed_smpl_global_rot = mocap_bone_global_rot @ curr_trans
         # set the global rotation of smplx bone
-        set_bone_to_global_orientation(smplx_armature, smplx_bone, transformed_smpl_global_rot.to_euler('XYZ'))
-
+        bone = set_all_global_armature_rot(smplx_armature, smplx_bone, transformed_smpl_global_rot.to_euler('XYZ'))
+    
 def reset_armature(armature_name):
+    """
+    Reset the rotation of all bones in an armature.
+    @param armature_name: The name of the armature.
+    """
     # set all bones's rotation to zero
     mocap=bpy.context.scene.objects[armature_name]
     for bone in mocap.pose.bones:
         bone.rotation_mode = 'XYZ'
         bone.rotation_euler = (0,0,0)
 
-def get_curr_smpl_rot(smpl_armature_name):
-    # get the current smpl bone rotation
-    smplx_armature = bpy.context.scene.objects[smpl_armature_name]
-    curr_smpl_rot = []
-    for smplx_bone_name in SMPL_JOINT_NAMES:
-        smplx_bone = smplx_armature.pose.bones[smplx_bone_name]
-        curr_smpl_rot.append(get_global_rot(smplx_armature, smplx_bone).to_euler('XYZ'))
-    return curr_smpl_rot
-
 def reset_blender():
+    """
+    Reset the blender scene
+    """
     bpy.ops.wm.read_homefile(use_empty=True)
 
+
+
+# ----------------- Main -----------------
 scene = bpy.data.scenes['Scene']
 # load the mocap armature fbx
-mocap_fbx = "E:\Downloads\Siyuan.fbx"
+mocap_fbx = "E:\Downloads\Falling_Dataset_Session2_100-115\Falling_Dataset_Session2_100-115\Trial_100\Kate.fbx"
 actor_name = mocap_fbx.split('\\')[-1].split('.')[0]
 print(f'--- loading {actor_name} ---')
-MOCAP_JOINT_NAME = [ f'{actor_name}:{name}' for name in MOCAP_JOINT_NAME]
+MOCAP_JOINT_NAMES = [ f'{actor_name}:{name}' for name in MOCAP_JOINT_NAMES]
 
 bpy.ops.import_scene.fbx(filepath=mocap_fbx, automatic_bone_orientation = True)
 print(f'--- {actor_name} loaded ---')
@@ -196,11 +278,12 @@ for frame in range(1, scene.frame_end):
     scene.frame_current = frame
     print(f'--- processing frame {frame} ---')
     updated_flag = False
-    curr_smplx_param = np.array(get_curr_smpl_rot(smplx_armature.name))
+    curr_smplx_param = np.array(get_all_global_armature_rot(smplx_armature.name))
     while(not updated_flag):
         print(f'looping-----')
-        update_smpl_rotation(smplx_armature.name, mocap_armature.name, MOCAP_JOINT_NAME, SMPL_JOINT_NAMES)
-        updated_smplx_param = np.array(get_curr_smpl_rot(smplx_armature.name))
+        update_smpl_rotation(smplx_armature.name, mocap_armature.name, MOCAP_JOINT_NAMES, SMPL_JOINT_NAMES)
+
+        updated_smplx_param = np.array(get_all_global_armature_rot(smplx_armature.name))
         print(f'curr_smplx_param: {curr_smplx_param}')
         print(f'updated_smplx_param: {updated_smplx_param}')
         if np.array_equal(updated_smplx_param, curr_smplx_param):
