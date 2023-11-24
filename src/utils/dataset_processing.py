@@ -67,6 +67,37 @@ def get_global_rot(armature, bone):
     global_mat = armature.matrix_world @ bone.matrix
     return global_mat
 
+def set_local_rot(armature_name, bone_name, local_rot):
+    """
+    set local rotation of a bone
+    @param armature: armature name
+    @param bone: bone name that you need to set local rotation
+    @param local_rot: local rotation of the bone in degrees
+    """
+    armature = bpy.context.scene.objects[armature_name]
+    bone = armature.pose.bones[bone_name] 
+    # convert local_rot to euler
+    local_rot = Euler(np.deg2rad(local_rot), 'XYZ')
+    bone.rotation_mode = 'XYZ'
+    bone.rotation_euler = local_rot
+    bpy.context.view_layer.update()
+    return bone
+
+def set_ith_local_rot(armature_name, bone_idx, local_rot):
+    """
+    set local rotation of a bone
+    @param armature: armature name
+    @param bone_idx: bone index that you need to set local rotation
+    @param local_rot: local rotation of the bone
+    """
+    if armature_name.startswith('SMPL'):
+        joint_list = SMPL_JOINT_NAMES
+    else:
+        joint_list = MOCAP_JOINT_NAMES
+    bone_name = joint_list[bone_idx]
+    bone = set_local_rot(armature_name, bone_name, local_rot)
+    return bone
+
 def calculate_bone_trans_matrix(mocap_armature_name, smplx_armature_name, mocap_bone_name, smplx_bone_name):
     """
     calculate the ration matrix needed to aligh the rotation of mocap bone to smplx bone
@@ -252,7 +283,7 @@ print(f'--- smpl armature loaded ---')
 # Setup up Mocap 
 mocap_armature = bpy.context.scene.objects[f'{actor_name}:Hips']
 # setup up Smplex
-smplx_armature = bpy.context.scene.objects['SMPL-female']
+smpl_armature = bpy.context.scene.objects['SMPL-female']
 # put smplx on the ground
 bpy.ops.object.smpl_snap_ground_plane()
 
@@ -262,21 +293,20 @@ for frame in range(1, scene.frame_end):
     scene.frame_current = frame
     print(f'--- processing frame {frame} ---')
     updated_flag = False
-    curr_smplx_param = np.array(get_all_global_armature_rot(smplx_armature.name))
+    curr_smpl_param = np.array(get_all_global_armature_rot(smpl_armature.name))
     while(not updated_flag):
         print(f'looping-----')
-        update_smpl_rotation(smplx_armature.name, mocap_armature.name, MOCAP_JOINT_NAMES, SMPL_JOINT_NAMES)
-        updated_smplx_param = np.array(get_all_global_armature_rot(smplx_armature.name))
-        print(f'curr_smplx_param: {curr_smplx_param}')
-        print(f'updated_smplx_param: {updated_smplx_param}')
-        if np.array_equal(updated_smplx_param, curr_smplx_param):
+        update_smpl_rotation(smpl_armature.name, mocap_armature.name, MOCAP_JOINT_NAMES, SMPL_JOINT_NAMES)
+        updated_smpl_param = np.array(get_all_global_armature_rot(smpl_armature.name))
+        print(f'curr_smplx_param: {curr_smpl_param}')
+        print(f'updated_smplx_param: {updated_smpl_param}')
+        if np.array_equal(updated_smpl_param, curr_smpl_param):
             updated_flag = True
         else:
-            curr_smplx_param = updated_smplx_param
-
+            curr_smpl_param = updated_smpl_param
     break
 
-local_rot = get_all_local_armature_rot(mocap_armature.name, MOCAP_JOINT_NAMES)
+local_rot = get_all_local_armature_rot(smpl_armature.name, SMPL_JOINT_NAMES)
 local_rot = np.array(local_rot)
 # save local_rot
 np.save(f'{actor_name}_local_rot.npy', local_rot)
