@@ -174,19 +174,8 @@ def get_all_local_armature_rot(armature_name, joint_list):
     joint_local_rot = []
     for bone_name in joint_list:
         bone = armature.pose.bones[bone_name]
-        # get global rotation
-        global_rot_mat = get_global_rot(armature, bone).to_3x3()
-        if bone.parent:
-            # Get the parent's global rotation matrix
-            parent_global_rot_mat = get_global_rot(armature, bone.parent).to_3x3()
-            # Calculate the inverse of the parent's global rotation matrix
-            parent_global_rot_mat_inv = parent_global_rot_mat.inverted()
-            # Compute the bone's local rotation (relative to its parent)
-            local_rot_mat = parent_global_rot_mat_inv @ global_rot_mat
-            local_rot_euler = local_rot_mat.to_euler('XYZ')
-        else:
-            # If the bone has no parent, its local rotation is the same as its global rotation
-            local_rot_euler = global_rot_mat.to_euler('XYZ')
+        bone.rotation_mode = 'XYZ'
+        local_rot_euler = bone.rotation_euler
         joint_local_rot.append(local_rot_euler)
     return joint_local_rot
 
@@ -204,16 +193,8 @@ def set_all_local_armature_rot(armature_name, joint_list, joint_local_rot):
         bone = armature.pose.bones[bone_name]
         # set rotation mode of the bone to euler:
         bone.rotation_mode = 'XYZ'
-        if bone.parent:
-            # Calculate the global rotation matrix from the local rotation and parent's global rotation
-            parent_global_rot_mat = get_global_rot(armature, bone.parent).to_3x3()
-            local_rot_mat = Euler(local_rot, 'XYZ').to_matrix()
-            global_rot_mat = parent_global_rot_mat @ local_rot_mat
-            # Convert global rotation matrix to Euler angles and set it as the bone's rotation
-            bone.rotation_euler = global_rot_mat.to_euler('XYZ')
-        else:
-            # If the bone has no parent, set the local rotation directly
-            bone.rotation_euler = Euler(local_rot, 'XYZ')
+        local_rot_mat = Euler(local_rot, 'XYZ').to_matrix()
+        bone.rotation_euler = local_rot_mat.to_euler('XYZ')
     # Update the view layer to reflect changes
     bpy.context.view_layer.update()
 
@@ -272,6 +253,9 @@ print(f'--- smpl armature loaded ---')
 mocap_armature = bpy.context.scene.objects[f'{actor_name}:Hips']
 # setup up Smplex
 smplx_armature = bpy.context.scene.objects['SMPL-female']
+# put smplx on the ground
+bpy.ops.object.smpl_snap_ground_plane()
+
 
 # loop through all the frames
 for frame in range(1, scene.frame_end):
@@ -282,7 +266,6 @@ for frame in range(1, scene.frame_end):
     while(not updated_flag):
         print(f'looping-----')
         update_smpl_rotation(smplx_armature.name, mocap_armature.name, MOCAP_JOINT_NAMES, SMPL_JOINT_NAMES)
-
         updated_smplx_param = np.array(get_all_global_armature_rot(smplx_armature.name))
         print(f'curr_smplx_param: {curr_smplx_param}')
         print(f'updated_smplx_param: {updated_smplx_param}')
@@ -293,3 +276,7 @@ for frame in range(1, scene.frame_end):
 
     break
 
+local_rot = get_all_local_armature_rot(mocap_armature.name, MOCAP_JOINT_NAMES)
+local_rot = np.array(local_rot)
+# save local_rot
+np.save(f'{actor_name}_local_rot.npy', local_rot)

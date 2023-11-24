@@ -1,4 +1,4 @@
-import sys
+ import sys
 import bpy
 import csv
 import argparse
@@ -31,10 +31,15 @@ Captury_boens = [
     "RightHandEE",
 ]
 
-# Convert the global rotation to local rotation (with respect to the parent bone)
-# input: blender bone object
-# output: relative rotation matrix
+
 def convert_global_rot_to_local_rot(bone):
+    '''
+    Convert the global rotation to local rotation (with respect to the parent bone)
+    input: blender bone object
+    output: relative (w.r.t parent bone) rotation matrix of the bone 
+
+    @param bone: The bone to convert the rotation for. A Blender bone object.
+    '''
     if bone.parent:
         return bone.parent.matrix.inverted() @ bone.matrix
     else:
@@ -66,8 +71,8 @@ def process_mocap_data(fbx_file_path, armature_name, output_file):
 
         # Write the header
         header = ['Frame']
-        for bone in armature.pose.bones:
-            bone_name = bone.name.split(':')[-1]
+        for bone_name in Captury_boens:
+            # bone_name = bone.name.split(':')[-1]
             header += [bone_name + '_X', bone_name + '_Y', bone_name + '_Z']
         csv_writer.writerow(header)
 
