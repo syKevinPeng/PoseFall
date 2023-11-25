@@ -1,7 +1,6 @@
 from time import sleep
 import bpy, json
 import numpy as np
-from sympy import false
 from mathutils import Euler, Matrix
 # Mocap Joint Names
 MOCAP_JOINT_NAMES = [
@@ -388,33 +387,27 @@ for frame in range(1, scene.frame_end):
             updated_flag = True
         else:
             curr_smpl_param = updated_smpl_param
-        # record data
-        # armature's object rotation
-        obj_rot = get_global_obj_rot(smpl_armature.name)
-        # armature's object location
-        obj_loc = get_obj_location(smpl_armature.name)
-        # armature bone's local rotation
-        bone_rot = get_all_local_armature_rot(smpl_armature.name, SMPL_JOINT_NAMES)
-
-        data = {
-            "frame": frame_number,
-            "arm_rot":obj_rot,
-            "arm_loc": obj_loc, 
-            "bone_rot": bone_rot
-        }
-        dataset.append(data)
+    # record data
+    # armature's object rotation
+    obj_rot = get_global_obj_rot(smpl_armature.name)
+    # armature's object location
+    obj_loc = get_obj_location(smpl_armature.name)
+    # armature bone's local rotation
+    bone_rot = get_all_local_armature_rot(smpl_armature.name, SMPL_JOINT_NAMES)
+    data = {
+        "frame": frame_number,
+        "arm_rot":np.array(obj_rot).tolist(),
+        "arm_loc": np.array(obj_loc).tolist(), 
+        "bone_rot": np.array(bone_rot).tolist()
+    }
+    dataset.append(data)
+    
     frame_number +=1
     if frame_number >= max_fram:
         break
 
-
-bone_rot = np.array(bone_rot)
-SAVE = false
+SAVE = True
 if SAVE:
     # save as json
     with open(f'{actor_name}_data.json', 'w') as f:
         json.dump(dataset, f)
-
-
-# save local_rot
-# np.save(f'{actor_name}_local_rot.npy', local_rot)
