@@ -2,13 +2,23 @@
 import numpy as np
 from pathlib import Path
 from icecream import ic
-# # %%
-# DATAPATH = '../data/falling_dataset.npz'
+from scipy.datasets import face
+from icecream import ic
+import torch
+import pandas as pd
+import sys
+sys.path.append('../utils')
+from joint_names import MOCAP_JOINT_NAMES, SMPL_JOINT_NAMES
+import smplx
+import pickle
+DATAPATH = '/home/siyuan/research/PoseFall/data/processed_data/Trial_100.csv'
 VIZ_OUTPUT = '/home/siyuan/research/PoseFall/src/visulization/viz_output'
-# DATAPATH = Path(DATAPATH)
+DATAPATH = Path(DATAPATH)
 VIZ_OUTPUT = Path(VIZ_OUTPUT)
-if not VIZ_OUTPUT.is_dir():
-    VIZ_OUTPUT.mkdir()
+
+# from smplx.joint_names import  JOINT_NAMES, SMPL_JOINT_NAMES 
+model_folder= '/home/siyuan/research/PoseFall/data/SMPL_cleaned'
+male_model = "/home/siyuan/research/PoseFall/data/SMPL_cleaned/SMPL_MALE.pkl"
 
 
 import smplx
@@ -23,6 +33,13 @@ human_model = smplx.SMPL(
 # get mesh and joints from the SMPL model
 mesh = human_model()
 joints = mesh.joints
+
+# processing dataframe
+df = pd.read_csv(DATAPATH, header=0)
+arm_trans = df.loc[:,['arm_loc_x', 'arm_loc_y', 'arm_loc_z']]
+arm_rot = df.loc[:,['arm_rot_x', 'arm_rot_y', 'arm_rot_z']]
+joint_rot = df.loc[:,'Pelvis_x':'R_Hand_z']
+
 # %%
 import pytorch3d, torch, imageio
 # visulize use pytorch3d
@@ -130,9 +147,6 @@ def viz_360(output_path, human_model, mesh):
     faces = torch.tensor(faces).to(device)
     faces = faces.unsqueeze(0)
     vertices = torch.tensor(vertices).to(device)
-    print(faces.shape)
-    print(vertices.shape)
-    exit()
     viz_mesh = pytorch3d.structures.Meshes(
         verts=vertices, 
         faces=faces, 

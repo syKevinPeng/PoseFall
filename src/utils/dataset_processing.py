@@ -361,11 +361,8 @@ print(f'--- smpl armature loaded ---')
 mocap_armature = bpy.context.scene.objects[f'{actor_name}:Hips']
 # setup up Smplex
 smpl_armature = bpy.context.scene.objects['SMPL-female']
-# put smplx on the ground
-# bpy.ops.object.smpl_snap_ground_plane()
-# reset the origin of smplx to the head of the pelvis (Similar to mocap)
-# set_armature_origin_to_bone_head(smpl_armature.name, 'Pelvis')
 
+max_frame = None
 dataset = []
 # loop through all the frames
 scene = bpy.data.scenes['Scene']
@@ -400,8 +397,10 @@ for frame in range(1, scene.frame_end):
     bone_rot = np.array(bone_rot).flatten()
     # expand each joint's name into JOINT_x, JOINT_y, JOINT_z
 
-    data = [frame, *arm_rot, *arm_loc, *bone_rot]
+    data = [int(frame), *arm_rot, *arm_loc, *bone_rot]
     dataset.append(data)
+    if max_frame and frame == max_frame:
+        break
     
 
 column_name = ['frame', 'arm_rot_x', 'arm_rot_y', 'arm_rot_z', 'arm_loc_x', 'arm_loc_y', 'arm_loc_z']
