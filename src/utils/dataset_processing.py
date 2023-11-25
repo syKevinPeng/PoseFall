@@ -1,6 +1,7 @@
 from time import sleep
-import bpy
+import bpy, json
 import numpy as np
+from sympy import false
 from mathutils import Euler, Matrix
 # Mocap Joint Names
 MOCAP_JOINT_NAMES = [
@@ -176,6 +177,15 @@ def set_all_global_armature_rot(armature, bone, world_rotation):
     bpy.context.view_layer.update()
     return bone
 
+def get_global_obj_rot(obj_name):
+    """
+    Get the global rotation of an object.
+    @param obj_name: The name of object.
+    @return: The global rotation (as Euler angles) of the object.
+    """
+    obj = bpy.context.scene.objects[obj_name]
+    return obj.matrix_world.to_euler('XYZ')
+
 def get_all_global_armature_rot(smpl_armature_name):
     """
     Get the current global rotations of all bones in an SMPLX armature.
@@ -257,16 +267,83 @@ def reset_armature(armature_name):
         bone.rotation_mode = 'XYZ'
         bone.rotation_euler = (0,0,0)
 
+def set_armature_origin_to_bone_head(armature_name, bone_name):
+    """
+    Set the origin of an armature to the head of a bone.
+    @param armature_name: The name of the armature.
+    @param bone_name: The name of the bone that the origin should be set to.
+    """
+    # Ensure we are in object mode
+    bpy.ops.object.mode_set(mode='OBJECT')
+    # Select the armature
+    armature = bpy.data.objects[armature_name]
+    bpy.context.view_layer.objects.active = armature
+    armature.select_set(True)
+    # Switch to edit mode to access the bone
+    bpy.ops.object.mode_set(mode='EDIT')
+    # Find the bone and set the cursor to its head
+    edit_bone = armature.data.edit_bones[bone_name]
+    bpy.context.scene.cursor.location = edit_bone.head
+    # Switch back to object mode and set origin to 3D cursor
+    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+
+
 def reset_blender():
     """
     Reset the blender scene
     """
     bpy.ops.wm.read_homefile(use_empty=True)
 
+def empty_scene():
+    """
+    Empty the blender scene
+    """
+    bpy.ops.object.select_all(action='SELECT')
+    bpy.ops.object.delete(use_global=False, confirm=False)
+    bpy.ops.outliner.orphans_purge()
+
+
+
+def align_object_direction(SMPL_armature_name, MOCAP_armature_name):
+    """
+    Making sure two armature object are facting the same direction. Warning: the rotation is hard coded
+    @param SMPL_armature_name: The name of the object that you want to align
+    @param MOCAP_armature_name  : The name of the object that you want to align to
+    """
+    SMPL_armature_name = bpy.context.scene.objects[SMPL_armature_name]
+    reference_obj = bpy.context.scene.objects[MOCAP_armature_name]
+    # Get the world rotation of the reference object
+    ref_world_rotation = reference_obj.matrix_world.to_euler()
+    adjusted_rotation = Euler((-(ref_world_rotation.x - np.radians(90)), 
+                                         -ref_world_rotation.y, 
+                                         ref_world_rotation.z - np.radians(180)), 'XYZ')
+    SMPL_armature_name.rotation_euler = adjusted_rotation
+
+def get_obj_location(obj_name):
+    """
+    Get the location of an object.
+    @param obj_name: The name of object.
+    @return: The location of the object.
+    """
+    obj = bpy.context.scene.objects[obj_name]
+    return obj.location
+
+def set_obj_location(obj_name, location):
+    """
+    Set the location of an object.
+    @param obj_name: The name of object.
+    @param location: The location to set.
+    """
+    obj = bpy.context.scene.objects[obj_name]
+    obj.location = location
+    bpy.context.view_layer.update()
+
 
 
 # ----------------- Main -----------------
 scene = bpy.data.scenes['Scene']
+
 # load the mocap armature fbx
 mocap_fbx = "E:\Downloads\Falling_Dataset_Session2_100-115\Falling_Dataset_Session2_100-115\Trial_100\Kate.fbx"
 actor_name = mocap_fbx.split('\\')[-1].split('.')[0]
@@ -285,28 +362,59 @@ mocap_armature = bpy.context.scene.objects[f'{actor_name}:Hips']
 # setup up Smplex
 smpl_armature = bpy.context.scene.objects['SMPL-female']
 # put smplx on the ground
-bpy.ops.object.smpl_snap_ground_plane()
+# bpy.ops.object.smpl_snap_ground_plane()
+# reset the origin of smplx to the head of the pelvis (Similar to mocap)
+# set_armature_origin_to_bone_head(smpl_armature.name, 'Pelvis')
 
-
+frame_number = 0
+max_fram = 200
+dataset = []
 # loop through all the frames
 for frame in range(1, scene.frame_end):
     scene.frame_current = frame
     print(f'--- processing frame {frame} ---')
     updated_flag = False
+    # set them to the same location
+    set_obj_location(smpl_armature.name, get_obj_location(mocap_armature.name))
+    # make sure they have the same orientation:
+    align_object_direction(smpl_armature.name, mocap_armature.name)
+    # then process the relative rotation for each joint
     curr_smpl_param = np.array(get_all_global_armature_rot(smpl_armature.name))
     while(not updated_flag):
         print(f'looping-----')
         update_smpl_rotation(smpl_armature.name, mocap_armature.name, MOCAP_JOINT_NAMES, SMPL_JOINT_NAMES)
         updated_smpl_param = np.array(get_all_global_armature_rot(smpl_armature.name))
-        print(f'curr_smplx_param: {curr_smpl_param}')
-        print(f'updated_smplx_param: {updated_smpl_param}')
         if np.array_equal(updated_smpl_param, curr_smpl_param):
             updated_flag = True
         else:
             curr_smpl_param = updated_smpl_param
-    break
+        # record data
+        # armature's object rotation
+        obj_rot = get_global_obj_rot(smpl_armature.name)
+        # armature's object location
+        obj_loc = get_obj_location(smpl_armature.name)
+        # armature bone's local rotation
+        bone_rot = get_all_local_armature_rot(smpl_armature.name, SMPL_JOINT_NAMES)
 
-local_rot = get_all_local_armature_rot(smpl_armature.name, SMPL_JOINT_NAMES)
-local_rot = np.array(local_rot)
+        data = {
+            "frame": frame_number,
+            "arm_rot":obj_rot,
+            "arm_loc": obj_loc, 
+            "bone_rot": bone_rot
+        }
+        dataset.append(data)
+    frame_number +=1
+    if frame_number >= max_fram:
+        break
+
+
+bone_rot = np.array(bone_rot)
+SAVE = false
+if SAVE:
+    # save as json
+    with open(f'{actor_name}_data.json', 'w') as f:
+        json.dump(dataset, f)
+
+
 # save local_rot
-np.save(f'{actor_name}_local_rot.npy', local_rot)
+# np.save(f'{actor_name}_local_rot.npy', local_rot)

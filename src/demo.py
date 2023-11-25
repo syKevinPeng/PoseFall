@@ -55,11 +55,18 @@ def main(model_folder,
     joint_loc = output.joints.detach().cpu()
     joint_loc = joint_loc[:,:24,:]
     joint_loc = torch.zeros_like(joint_loc)
-    joint_loc = joint_loc.reshape(1, -1)
+
+    # load npz file
+    new_pose = np.load("/home/siyuan/research/PoseFall/src/visulization/Kate_local_rot.npy")
+    new_pose = torch.tensor(new_pose, dtype=torch.float32)
+    print(f'new pose shape: {new_pose.shape}')
 
     joint_ori  = output.get('body_pose').detach().cpu().reshape(-1, 3)
-    print(f'joint_ori: {joint_ori.shape}')
-
+    joint_ori = new_pose[1:,:]
+    # joint_ori = torch.zeros_like(joint_ori)
+    # modify ith joint
+    joint_ori[16, :] = torch.tensor(np.deg2rad([0.0, 90, 0.0]))
+    print(f'intput shape:{joint_ori.shape}')
     output = model(body_pose = joint_ori.reshape(1, -1), return_verts=True)
     vertices = output.vertices.detach().cpu().numpy().squeeze()
     joints = output.joints.detach().cpu().numpy().squeeze()
@@ -89,7 +96,6 @@ def main(model_folder,
         from matplotlib import pyplot as plt
         from mpl_toolkits.mplot3d import Axes3D
         from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-
         fig = plt.figure(figsize=(10, 10))
         ax = fig.add_subplot(111, projection='3d')
         ax.view_init(elev=90., azim=-90., roll = 0)
@@ -99,6 +105,9 @@ def main(model_folder,
         mesh.set_edgecolor(edge_color)
         mesh.set_facecolor(face_color)
         ax.add_collection3d(mesh)
+        ax.set_xlim(-1, 1)
+        ax.set_ylim(-1, 1)  
+        ax.set_zlim(-1, 1)
         # ax.scatter(joints[:, 0], joints[:, 1], joints[:, 2], color='r')
         joints = joints[:24, :]
         if plot_joints:
