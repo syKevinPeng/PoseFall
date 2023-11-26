@@ -7,41 +7,19 @@ from icecream import ic
 import torch
 import pandas as pd
 import sys
-sys.path.append('../utils')
+
+from tqdm import tqdm
+sys.path.append("../utils")
 from joint_names import MOCAP_JOINT_NAMES, SMPL_JOINT_NAMES
 import smplx
 import pickle
-DATAPATH = '/home/siyuan/research/PoseFall/data/processed_data/Trial_100.csv'
-VIZ_OUTPUT = '/home/siyuan/research/PoseFall/src/visulization/viz_output'
-DATAPATH = Path(DATAPATH)
-VIZ_OUTPUT = Path(VIZ_OUTPUT)
 
-# from smplx.joint_names import  JOINT_NAMES, SMPL_JOINT_NAMES 
-model_folder= '/home/siyuan/research/PoseFall/data/SMPL_cleaned'
-male_model = "/home/siyuan/research/PoseFall/data/SMPL_cleaned/SMPL_MALE.pkl"
-
-
-import smplx
-model_folder= '/home/siyuan/research/PoseFall/data/SMPL_cleaned'
-human_model = smplx.SMPL(
-    model_path = model_folder,
-    create_body_pose=True,
-    body_pose= None,
-    create_betas=True,
-    betas=None,
-)
-# get mesh and joints from the SMPL model
-mesh = human_model()
-joints = mesh.joints
-
-# processing dataframe
-df = pd.read_csv(DATAPATH, header=0)
-arm_trans = df.loc[:,['arm_loc_x', 'arm_loc_y', 'arm_loc_z']]
-arm_rot = df.loc[:,['arm_rot_x', 'arm_rot_y', 'arm_rot_z']]
-joint_rot = df.loc[:,'Pelvis_x':'R_Hand_z']
-
-# %%
+import matplotlib.pyplot as plt
+from matplotlib import pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import pytorch3d, torch, imageio
+
 # visulize use pytorch3d
 from pytorch3d.renderer import (
     RasterizationSettings,
@@ -50,6 +28,70 @@ from pytorch3d.renderer import (
     look_at_view_transform,
     HardPhongShader,
 )
+
+# %%
+DATAPATH = "/home/siyuan/research/PoseFall/data/processed_data/Trial_100.csv"
+VIZ_OUTPUT = "/home/siyuan/research/PoseFall/src/visulization/viz_output"
+DATAPATH = Path(DATAPATH)
+VIZ_OUTPUT = Path(VIZ_OUTPUT)
+
+# from smplx.joint_names import  JOINT_NAMES, SMPL_JOINT_NAMES
+model_folder = "/home/siyuan/research/PoseFall/data/SMPL_cleaned"
+male_model = "/home/siyuan/research/PoseFall/data/SMPL_cleaned/SMPL_MALE.pkl"
+device = torch.device("cuda:0")
+
+def load_data(path=DATAPATH):
+    df = pd.read_csv(path, header=0)
+    return df
+# initialization
+def init_human_model():
+    human_model = smplx.SMPL(
+        model_path=model_folder,
+        create_body_pose=True,
+        body_pose=None,
+        create_betas=True,
+        betas=None,
+        gender="male",
+    )
+    output = human_model(return_verts=True, return_full_pose=True)
+    return human_model, output
+
+
+def get_motion_param(frame_num, df):
+    arm_trans = df.loc[:, ["arm_loc_x", "arm_loc_y", "arm_loc_z"]]
+    arm_rot = df.loc[:, ["arm_rot_x", "arm_rot_y", "arm_rot_z"]]
+    joint_rot = df.loc[:, "Pelvis_x":"R_Hand_z"]
+    new_pose = new_pose = torch.tensor(
+        joint_rot.iloc[frame_num].values, dtype=torch.float32
+    )
+    new_pose = new_pose.view(-1, 3)
+    bone_rot = new_pose[1:, :]
+
+    # translation
+    arm_trans = torch.tensor(arm_trans.iloc[frame_num].values, dtype=torch.float32)
+    arm_trans = arm_trans.view(1, 3)
+
+    # global orientation
+    arm_rot = torch.tensor(arm_rot.iloc[frame_num].values, dtype=torch.float32)
+    # arm_rot = torch.zeros_like(arm_rot)
+    arm_rot = arm_rot.view(1, 3)
+    return [bone_rot, arm_trans, arm_rot]
+
+
+def update_model(human_model, params):
+    bone_rot, arm_trans, arm_rot = params
+    output = human_model(
+        body_pose=bone_rot.reshape(1, -1),
+        return_verts=True,
+        transl=arm_trans,
+        global_orient=arm_rot,
+        return_full_pose=True,
+    )
+    vertices = output.vertices.detach().cpu().numpy().squeeze()
+    joints = output.joints.detach().cpu().numpy().squeeze()
+    return vertices, joints
+
+
 def get_mesh_renderer(image_size=512, lights=None, device=None):
     """
     Returns a Pytorch3D Mesh Renderer.
@@ -66,7 +108,9 @@ def get_mesh_renderer(image_size=512, lights=None, device=None):
         else:
             device = torch.device("cpu")
     raster_settings = RasterizationSettings(
-        image_size=image_size, blur_radius=0.0, faces_per_pixel=1,
+        image_size=image_size,
+        blur_radius=0.0,
+        faces_per_pixel=1,
     )
     renderer = MeshRenderer(
         rasterizer=MeshRasterizer(raster_settings=raster_settings),
@@ -74,102 +118,60 @@ def get_mesh_renderer(image_size=512, lights=None, device=None):
     )
     return renderer
 
-
-device = torch.device("cuda:0")
-vertices = mesh.vertices
-vertices = vertices.detach().cpu()
-faces = human_model.faces.astype(np.int64)
-textures = torch.ones_like(vertices)
-color = [0.7, 0.7, 1]
-textures = textures * torch.tensor(color)
-textures = pytorch3d.renderer.TexturesVertex(textures).to(device)
-
-faces = torch.tensor(faces).to(device)
-faces = faces.unsqueeze(0)
-vertices = torch.tensor(vertices).to(device)
-
-viz_mesh = pytorch3d.structures.Meshes(
-    verts=vertices, 
-    faces=faces, 
-    textures=textures)
-viz_mesh = viz_mesh.to(device)
 # %%
-# render an xyz world axis
-vertices = torch.tensor([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=torch.float32)  
-faces = torch.tensor([[0, 1], [0, 2], [0, 3]], dtype=torch.int64) 
-textures = torch.tensor([[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=torch.float32)  
-axis_textures = pytorch3d.renderer.TexturesVertex([textures]) 
-ic(vertices.shape)
-ic(faces.shape)
-axis_mesh = pytorch3d.structures.Meshes(verts=vertices, faces=faces, textures=axis_textures)
-axis_mesh = axis_mesh.to(device)
-
-jointed_mesh = pytorch3d.structures.join_meshes_as_batch([viz_mesh, axis_mesh])
-# %%
-
 # render an image
 lights = pytorch3d.renderer.PointLights(location=[[0, 0, 3]], device=device)
 renderer = get_mesh_renderer(image_size=512, lights=lights, device=device)
 
-# create a 360 view
-azims = torch.linspace(0, 360, steps=36)
+# loop through all the frames
+R, T = look_at_view_transform(dist=3.0, elev=0, azim=0)
+cameras = pytorch3d.renderer.FoVPerspectiveCameras(R=R, T=T, device=device, fov=60).to(
+    device
+)
+
 rends = []
-for i in range(len(azims)):
-    R, T = look_at_view_transform(dist=3.0, elev=0, azim=azims[i])
-    cameras = pytorch3d.renderer.FoVPerspectiveCameras(
-        R=R, T=T, device=device, fov=60
-    ).to(device)
-    rend = renderer(jointed_mesh, cameras=cameras, lights=lights)
-    rend = rend.cpu().numpy()[0, ..., :3]  # (B, H, W, 4) -> (H, W, 3)
-    # convert to uint8
-    rend = rend * 255
-    rends.append(rend.astype("uint8"))
-
-
-imageio.mimsave(VIZ_OUTPUT/"example.gif", rends, fps=24, loop=0)
-
-
-# %%
-joints.shape
-
-
-def viz_360(output_path, human_model, mesh):
-
-    device = torch.device("cuda:0")
-    vertices = mesh.vertices
-    vertices = vertices.detach().cpu()
+data = load_data()
+human_model, _ = init_human_model()
+max_frame = len(data)
+for frame_num in tqdm(range(0, max_frame)):
+    params = get_motion_param(frame_num, df=data)
+    vertices, joints = update_model(human_model, params)
+    vertices = torch.tensor(vertices).to(device)
+    vertices = vertices.unsqueeze(0)
     faces = human_model.faces.astype(np.int64)
     textures = torch.ones_like(vertices)
-    color = [0.7, 0.7, 1]
-    textures = textures * torch.tensor(color)
+    color = torch.tensor([0.7, 0.7, 1]).to(device)
+    textures = textures * color
     textures = pytorch3d.renderer.TexturesVertex(textures).to(device)
 
     faces = torch.tensor(faces).to(device)
     faces = faces.unsqueeze(0)
-    vertices = torch.tensor(vertices).to(device)
-    viz_mesh = pytorch3d.structures.Meshes(
-        verts=vertices, 
-        faces=faces, 
-        textures=textures)
-    viz_mesh = viz_mesh.to(device)
 
-    lights = pytorch3d.renderer.PointLights(location=[[0, 0, 3]], device=device)
-    renderer = get_mesh_renderer(image_size=512, lights=lights, device=device)
-
-    # create a 360 view
-    azims = torch.linspace(0, 360, steps=36)
-    rends = []
-    for i in range(len(azims)):
-        R, T = look_at_view_transform(dist=3.0, elev=0, azim=azims[i])
-        cameras = pytorch3d.renderer.FoVPerspectiveCameras(
-            R=R, T=T, device=device, fov=60
-        ).to(device)
-        rend = renderer(jointed_mesh, cameras=cameras, lights=lights)
-        rend = rend.cpu().numpy()[0, ..., :3]  # (B, H, W, 4) -> (H, W, 3)
-        # convert to uint8
-        rend = rend * 255
-        rends.append(rend.astype("uint8"))
+    rendered_mesh = pytorch3d.structures.Meshes(
+        verts=vertices, faces=faces, textures=textures
+    )
+    rendered_mesh = rendered_mesh.to(device)
+    rend = renderer(rendered_mesh, cameras=cameras, lights=lights)
+    rend = rend.cpu().numpy()[0, ..., :3]  # (B, H, W, 4) -> (H, W, 3)
+    # convert to uint8
+    rend = rend * 255
+    rend = rend.astype("uint8")
+    rends.append(rend)
 
 
-    imageio.mimsave(output_path, rends, fps=24, loop=0)
+imageio.mimsave(VIZ_OUTPUT / "example.gif", rends, fps=24, loop=0)
 
+# %%
+# create a 360 view
+# azims = torch.linspace(0, 360, steps=36)
+# rends = []
+# for i in range(len(azims)):
+#     R, T = look_at_view_transform(dist=3.0, elev=0, azim=azims[i])
+#     cameras = pytorch3d.renderer.FoVPerspectiveCameras(
+#         R=R, T=T, device=device, fov=60
+#     ).to(device)
+#     rend = renderer(jointed_mesh, cameras=cameras, lights=lights)
+#     rend = rend.cpu().numpy()[0, ..., :3]  # (B, H, W, 4) -> (H, W, 3)
+#     # convert to uint8
+#     rend = rend * 255
+#     rends.append(rend.astype("uint8"))
