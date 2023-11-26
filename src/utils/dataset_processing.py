@@ -327,6 +327,13 @@ def empty_scene():
     bpy.ops.object.delete(use_global=False, confirm=False)
     bpy.ops.outliner.orphans_purge()
 
+def find_max_frame_in_actions():
+    max_frame = 0
+    for action in bpy.data.actions:
+        for fcurve in action.fcurves:
+            for keyframe in fcurve.keyframe_points:
+                max_frame = max(max_frame, keyframe.co.x)
+    return max_frame
 
 
 
@@ -334,9 +341,9 @@ def empty_scene():
 trial_num = "Trial_100"
 output_dir = "../../data/processed_data"
 # load the mocap armature fbx
-# mocap_fbx = "E:\Downloads\Falling_Dataset_Session2_100-115\Falling_Dataset_Session2_100-115\Trial_100\Kate.fbx"
-mocap_fbx = "/home/siyuan/research/PoseFall/data/MoCap/Kate.fbx"
-actor_name = mocap_fbx.split('/')[-1].split('.')[0]
+mocap_fbx = "E:\Downloads\Falling_Dataset_Session2_100-115\Falling_Dataset_Session2_100-115\Trial_100\Kate.fbx"
+# mocap_fbx = "/home/siyuan/research/PoseFall/data/MoCap/Kate.fbx"
+actor_name = mocap_fbx.split('\\')[-1].split('.')[0]
 print(f'--- loading {actor_name} ---')
 MOCAP_JOINT_NAMES = [ f'{actor_name}:{name}' for name in MOCAP_JOINT_NAMES]
 
@@ -356,6 +363,8 @@ max_frame = None
 dataset = []
 # loop through all the frames
 scene = bpy.data.scenes['Scene']
+largest_frame = int(find_max_frame_in_actions())
+scene.frame_end = largest_frame
 for frame in range(1, scene.frame_end):
     scene.frame_current = frame
     print(f'--- processing frame {frame} ---')
