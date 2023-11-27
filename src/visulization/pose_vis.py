@@ -78,7 +78,7 @@ def get_motion_param(frame_num, df):
 
     # global orientation
     arm_rot = torch.tensor(arm_rot.iloc[frame_num].values, dtype=torch.float32)
-    arm_rot = torch.zeros_like(arm_rot)
+    # arm_rot = torch.zeros_like(arm_rot)
     arm_rot = arm_rot.view(1, 3)
     return [bone_rot, arm_trans, arm_rot]
 
@@ -123,7 +123,7 @@ def get_mesh_renderer(image_size=512, lights=None, device=None):
     )
     return renderer
 # Function to create grid lines
-def create_ground_plane(size=2, center=(0, -0.2, 0), color=[0, 0, 1]):
+def create_ground_plane(size=2, center=(0, 0, 0), color=[0, 0, 1]):
     """
     Create a square ground plane.
     size: Length of the square side
@@ -158,7 +158,7 @@ renderer = get_mesh_renderer(image_size=512, lights=lights, device=device)
 ground_plane = create_ground_plane().to(device)
 
 # loop through all the frames
-R, T = look_at_view_transform(dist=5.0, elev=0, azim=0)
+R, T = look_at_view_transform(dist=8.0, elev=0, azim=0)
 T[0][1] -= 1
 cameras = pytorch3d.renderer.FoVPerspectiveCameras(R=R, T=T, device=device, fov=60).to(
     device
