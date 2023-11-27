@@ -367,7 +367,7 @@ dataset = []
 # loop through all the frames
 scene = bpy.data.scenes['Scene']
 largest_frame = int(find_max_frame_in_actions())
-scene.frame_end = largest_frame
+scene.frame_end = 5
 scene.frame_start = 1
 for frame in range(scene.frame_start, scene.frame_end):
     scene.frame_current = frame
@@ -391,9 +391,9 @@ for frame in range(scene.frame_start, scene.frame_end):
     # armature's object rotation
     obj_rot = get_global_obj_rot(smpl_armature.name)
     # armature's object location: the global location of the root bone
-    obj_loc = get_bone_global_loc(smpl_armature.name, 'root')
-    # armature bone's local rotation: the global rotation of the root bone
-    bone_rot = get_global_bone_rot(smpl_armature.name, smpl_armature.pose.bones['root']).to_euler('XYZ')
+    obj_loc = get_global_bone_rot(smpl_armature.name, smpl_armature.pose.bones['root']).to_euler('XYZ')
+    # armature bone's local rotation: 
+    bone_rot = get_all_local_bone_rot(smpl_armature.name, SMPL_JOINT_NAMES)
     
     arm_rot = np.array(obj_rot).flatten()
     arm_loc = np.array(obj_loc).flatten()
