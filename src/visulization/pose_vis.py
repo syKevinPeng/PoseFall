@@ -9,6 +9,7 @@ import pandas as pd
 import sys
 
 from tqdm import tqdm
+
 sys.path.append("../utils")
 from joint_names import MOCAP_JOINT_NAMES, SMPL_JOINT_NAMES
 import smplx
@@ -28,7 +29,8 @@ from pytorch3d.renderer import (
     look_at_view_transform,
     HardPhongShader,
 )
-
+from pytorch3d.structures import Meshes
+from pytorch3d.renderer.mesh import TexturesVertex
 # %%
 DATAPATH = "/home/siyuan/research/PoseFall/data/processed_data/Trial_100.csv"
 VIZ_OUTPUT = "/home/siyuan/research/PoseFall/src/visulization/viz_output"
@@ -40,9 +42,12 @@ model_folder = "/home/siyuan/research/PoseFall/data/SMPL_cleaned"
 male_model = "/home/siyuan/research/PoseFall/data/SMPL_cleaned/SMPL_MALE.pkl"
 device = torch.device("cuda:0")
 
+
 def load_data(path=DATAPATH):
     df = pd.read_csv(path, header=0)
     return df
+
+
 # initialization
 def init_human_model():
     human_model = smplx.SMPL(
@@ -73,7 +78,7 @@ def get_motion_param(frame_num, df):
 
     # global orientation
     arm_rot = torch.tensor(arm_rot.iloc[frame_num].values, dtype=torch.float32)
-    # arm_rot = torch.zeros_like(arm_rot)
+    arm_rot = torch.zeros_like(arm_rot)
     arm_rot = arm_rot.view(1, 3)
     return [bone_rot, arm_trans, arm_rot]
 
@@ -117,14 +122,44 @@ def get_mesh_renderer(image_size=512, lights=None, device=None):
         shader=HardPhongShader(device=device, lights=lights),
     )
     return renderer
+# Function to create grid lines
+def create_ground_plane(size=2, center=(0, -0.2, 0), color=[0, 0, 1]):
+    """
+    Create a square ground plane.
+    size: Length of the square side
+    center: Center of the square in (x, y, z)
+    color: Color of the ground plane
+    """
+    half_size = size / 2
+    cx, cy, cz = center
+    # Four corners of the square
+    verts = torch.tensor([
+        [cx - half_size, cy, cz - half_size],
+        [cx - half_size, cy, cz + half_size],
+        [cx + half_size, cy, cz + half_size],
+        [cx + half_size, cy, cz - half_size]
+    ], dtype=torch.float32)
+    # Two triangles to form the square
+    faces = torch.tensor([
+        [0, 1, 2],
+        [0, 2, 3]
+    ], dtype=torch.int64)
+    # Color (repeated for each vertex)
+    colors = torch.tensor([color for _ in range(verts.shape[0])], dtype=torch.float32)
+
+    ground_mesh = Meshes(verts=[verts], faces=[faces], textures=TexturesVertex(verts_features=[colors]))
+    return ground_mesh
 
 # %%
 # render an image
 lights = pytorch3d.renderer.PointLights(location=[[0, 0, 3]], device=device)
 renderer = get_mesh_renderer(image_size=512, lights=lights, device=device)
+# create the grid
+ground_plane = create_ground_plane().to(device)
 
 # loop through all the frames
-R, T = look_at_view_transform(dist=3.0, elev=0, azim=0)
+R, T = look_at_view_transform(dist=5.0, elev=0, azim=0)
+T[0][1] -= 1
 cameras = pytorch3d.renderer.FoVPerspectiveCameras(R=R, T=T, device=device, fov=60).to(
     device
 )
@@ -151,7 +186,13 @@ for frame_num in tqdm(range(0, max_frame)):
         verts=vertices, faces=faces, textures=textures
     )
     rendered_mesh = rendered_mesh.to(device)
-    rend = renderer(rendered_mesh, cameras=cameras, lights=lights)
+    combined_verts = torch.cat([rendered_mesh.verts_list()[0], ground_plane.verts_list()[0]], dim=0)
+    combined_faces = torch.cat([rendered_mesh.faces_list()[0], ground_plane.faces_list()[0] + rendered_mesh.verts_list()[0].shape[0]], dim=0)
+    combined_textures = TexturesVertex(verts_features=torch.cat([rendered_mesh.textures.verts_features_list()[0], ground_plane.textures.verts_features_list()[0]], dim=0).unsqueeze(0))
+
+    combined_mesh = Meshes(verts=[combined_verts], faces=[combined_faces], textures=combined_textures).to(device)
+
+    rend = renderer(combined_mesh, cameras=cameras, lights=lights)
     rend = rend.cpu().numpy()[0, ..., :3]  # (B, H, W, 4) -> (H, W, 3)
     # convert to uint8
     rend = rend * 255
