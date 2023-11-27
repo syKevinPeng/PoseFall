@@ -64,10 +64,12 @@ def get_global_bone_rot(armature_name, bone):
     output: global rotation of the bone
     @param armature: armature object
     @param bone: bone object that you need to get global rotation
+    @return: global rotation of the bone: a rotation matrix
     """
     armature = bpy.context.scene.objects[armature_name]
     global_mat = armature.matrix_world @ bone.matrix
     return global_mat
+
 def get_bone_global_loc(armature_name, bone_name):
     """
     Get the global location of a bone.
@@ -77,7 +79,7 @@ def get_bone_global_loc(armature_name, bone_name):
     """
     armature = bpy.context.scene.objects[armature_name]
     bone = armature.pose.bones[bone_name]
-    return armature.matrix_world @ bone.matrix @ bone.bone.head_local
+    return armature.matrix_world @ bone.head
 
 def get_all_global_bone_rot(smpl_armature_name):
     """
@@ -341,9 +343,9 @@ def find_max_frame_in_actions():
 trial_num = "Trial_100"
 output_dir = "../../data/processed_data"
 # load the mocap armature fbx
-mocap_fbx = "E:\Downloads\Falling_Dataset_Session2_100-115\Falling_Dataset_Session2_100-115\Trial_100\Kate.fbx"
-# mocap_fbx = "/home/siyuan/research/PoseFall/data/MoCap/Kate.fbx"
-actor_name = mocap_fbx.split('\\')[-1].split('.')[0]
+# mocap_fbx = "E:\Downloads\Falling_Dataset_Session2_100-115\Falling_Dataset_Session2_100-115\Trial_100\Kate.fbx"
+mocap_fbx = "/home/siyuan/research/PoseFall/data/MoCap/Kate.fbx"
+actor_name = mocap_fbx.split('/')[-1].split('.')[0]
 print(f'--- loading {actor_name} ---')
 MOCAP_JOINT_NAMES = [ f'{actor_name}:{name}' for name in MOCAP_JOINT_NAMES]
 
@@ -358,14 +360,16 @@ print(f'--- smpl armature loaded ---')
 mocap_armature = bpy.context.scene.objects[f'{actor_name}:Hips']
 # setup up Smplex
 smpl_armature = bpy.context.scene.objects['SMPL-female']
-
+# move the origin of the smpl armature to the hips
+set_armature_origin_to_bone_head(smpl_armature.name, 'Pelvis')
 max_frame = None
 dataset = []
 # loop through all the frames
 scene = bpy.data.scenes['Scene']
 largest_frame = int(find_max_frame_in_actions())
 scene.frame_end = largest_frame
-for frame in range(1, scene.frame_end):
+scene.frame_start = 1
+for frame in range(scene.frame_start, scene.frame_end):
     scene.frame_current = frame
     print(f'--- processing frame {frame} ---')
     updated_flag = False
@@ -386,10 +390,10 @@ for frame in range(1, scene.frame_end):
     # record data
     # armature's object rotation
     obj_rot = get_global_obj_rot(smpl_armature.name)
-    # armature's object location
-    obj_loc = get_obj_location(smpl_armature.name)
-    # armature bone's local rotation
-    bone_rot = get_all_local_bone_rot(smpl_armature.name, SMPL_JOINT_NAMES)
+    # armature's object location: the global location of the root bone
+    obj_loc = get_bone_global_loc(smpl_armature.name, 'root')
+    # armature bone's local rotation: the global rotation of the root bone
+    bone_rot = get_global_bone_rot(smpl_armature.name, smpl_armature.pose.bones['root']).to_euler('XYZ')
     
     arm_rot = np.array(obj_rot).flatten()
     arm_loc = np.array(obj_loc).flatten()
