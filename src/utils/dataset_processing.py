@@ -224,6 +224,17 @@ def set_obj_location(obj_name, location):
     obj.location = location
     bpy.context.view_layer.update()
 
+def set_obj_rotation(obj_name, rotation):
+    """
+    Set the rotation of an object.
+    @param obj_name: The name of object.
+    @param rotation: The rotation to set.
+    """
+    obj = bpy.context.scene.objects[obj_name]
+    obj.rotation_euler = rotation
+    bpy.context.view_layer.update()
+    
+
 # ----------------- Others -----------------
 def set_ith_local_rot(armature_name, bone_idx, local_rot):
     """
@@ -341,11 +352,12 @@ def find_max_frame_in_actions():
 
 # ----------------- Main -----------------
 trial_num = "Trial_100"
-output_dir = "../../data/processed_data"
-# load the mocap armature fbx
-# mocap_fbx = "E:\Downloads\Falling_Dataset_Session2_100-115\Falling_Dataset_Session2_100-115\Trial_100\Kate.fbx"
-mocap_fbx = "/home/siyuan/research/PoseFall/data/MoCap/Kate.fbx"
-actor_name = mocap_fbx.split('/')[-1].split('.')[0]
+# output_dir = "../../data/processed_data"
+output_dir = "./"
+# load the mocap armature fbx 
+mocap_fbx = "E:\Downloads\Falling_Dataset_Session2_100-115\Falling_Dataset_Session2_100-115\Trial_100\Kate.fbx"
+# mocap_fbx = "/home/siyuan/research/PoseFall/data/MoCap/Kate.fbx"
+actor_name = mocap_fbx.split('\\')[-1].split('.')[0]
 print(f'--- loading {actor_name} ---')
 MOCAP_JOINT_NAMES = [ f'{actor_name}:{name}' for name in MOCAP_JOINT_NAMES]
 
@@ -378,6 +390,7 @@ for frame in range(scene.frame_start, scene.frame_end):
     set_obj_location(smpl_armature.name, get_obj_location(mocap_armature.name)) # I can't figure out why I need to do this twice
     # make sure they have the same orientation:
     align_object_direction(smpl_armature.name, mocap_armature.name)
+    align_object_direction(smpl_armature.name, mocap_armature.name)
     # then process the relative rotation for each joint
     curr_smpl_param = np.array(get_all_global_bone_rot(smpl_armature.name))
     # Insert keyframes for armature object's location and rotation
@@ -393,8 +406,8 @@ for frame in range(scene.frame_start, scene.frame_end):
             curr_smpl_param = updated_smpl_param
     # record data
     # armature's object rotation
-    # obj_rot = get_global_obj_rot(smpl_armature.name)
-    obj_rot = get_global_bone_rot(smpl_armature.name, smpl_armature.pose.bones['root']).to_euler('XYZ')
+    obj_rot = get_global_obj_rot(smpl_armature.name)
+    # obj_rot = get_global_bone_rot(smpl_armature.name, smpl_armature.pose.bones['Spine1']).to_euler('XYZ')
     # armature's object location: the global location of the root bone
     # obj_loc = get_global_bone_rot(smpl_armature.name, smpl_armature.pose.bones['root']).to_euler('XYZ')
     # get the location of the armature object
@@ -431,3 +444,39 @@ dataset = np.vstack((column_name, dataset))
 # save the dataset as csv
 save_path = os.path.join(output_dir, f'{trial_num}.csv')
 np.savetxt(save_path, dataset, delimiter=',', fmt='%s')
+
+
+# # remove everything
+# empty_scene()
+# # Create a new SMPL armature and let it move acccording to recorded data
+# bpy.data.window_managers["WinMan"].smpl_tool.smpl_gender = 'female'
+# bpy.ops.scene.smpl_add_gender()
+# smpl_armature = bpy.context.scene.objects['SMPL-female']
+
+# # from each frame, read the data and set the armature's rotation, location
+# # load the dataset
+# dataset = np.loadtxt(save_path, delimiter=',', dtype=str)
+# column_name = dataset[0]
+# dataset = dataset[1:]
+# # loop through each frame
+# for frame in dataset:
+#     # convert frame number from string to int
+#     frame_num = frame[0].astype(float)
+#     frame_num  = int(frame_num)
+#     # set the armature's object rotation
+#     arm_rot = frame[1:4].astype(float)
+#     # arm_rot = Euler(arm_rot, 'XYZ')
+#     set_obj_rotation(smpl_armature.name, arm_rot)
+#     # set the armature's object location
+#     arm_loc = frame[4:7].astype(float)
+#     set_obj_location(smpl_armature.name, arm_loc)
+#     # set the armature's bone rotation
+#     bone_rot = frame[7:].astype(float)
+#     bone_rot = bone_rot.reshape(-1, 3)
+#     set_all_local_bone_rot(smpl_armature.name, SMPL_JOINT_NAMES, bone_rot)
+#     # insert key frames here:
+#     smpl_armature.keyframe_insert(data_path="location", frame=frame_num)
+#     smpl_armature.keyframe_insert(data_path="rotation_euler", frame=frame_num)
+#     for bone_name in SMPL_JOINT_NAMES:
+#         bone = smpl_armature.pose.bones[bone_name]
+#         bone.keyframe_insert(data_path="rotation_euler", frame=frame_num)

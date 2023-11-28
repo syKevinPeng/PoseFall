@@ -158,8 +158,7 @@ renderer = get_mesh_renderer(image_size=512, lights=lights, device=device)
 ground_plane = create_ground_plane().to(device)
 
 # loop through all the frames
-R, T = look_at_view_transform(dist=8.0, elev=0, azim=0)
-T[0][1] -= 1
+R, T = look_at_view_transform(dist=8.0, elev=-90, azim=0)
 cameras = pytorch3d.renderer.FoVPerspectiveCameras(R=R, T=T, device=device, fov=60).to(
     device
 )
@@ -168,6 +167,7 @@ rends = []
 data = load_data()
 human_model, _ = init_human_model()
 max_frame = len(data)
+max_frame = 20
 for frame_num in tqdm(range(0, max_frame)):
     params = get_motion_param(frame_num, df=data)
     vertices, joints = update_model(human_model, params)
