@@ -189,20 +189,20 @@ def set_obj_rotation(obj_name, rotation):
     
 
 # ----------------- Others -----------------
-def set_ith_local_rot(armature_name, bone_idx, local_rot):
-    """
-    set local rotation of a bone
-    @param armature: armature name
-    @param bone_idx: bone index that you need to set local rotation
-    @param local_rot: local rotation of the bone
-    """
-    if armature_name.startswith('SMPL'):
-        joint_list = SMPL_JOINT_NAMES
-    else:
-        joint_list = MOCAP_JOINT_NAMES
-    bone_name = joint_list[bone_idx]
-    bone = set_local_bone_rot(armature_name, bone_name, local_rot)
-    return bone
+# def set_ith_local_rot(armature_name, bone_idx, local_rot):
+#     """
+#     set local rotation of a bone
+#     @param armature: armature name
+#     @param bone_idx: bone index that you need to set local rotation
+#     @param local_rot: local rotation of the bone
+#     """
+#     if armature_name.startswith('SMPL'):
+#         joint_list = SMPL_JOINT_NAMES
+#     else:
+#         joint_list = MOCAP_JOINT_NAMES
+#     bone_name = joint_list[bone_idx]
+#     bone = set_local_bone_rot(armature_name, bone_name, local_rot)
+#     return bone
 
 def calculate_bone_trans_matrix(mocap_armature_name, smplx_armature_name, mocap_bone_name, smplx_bone_name):
     """
