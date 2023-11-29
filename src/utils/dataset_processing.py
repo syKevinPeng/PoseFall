@@ -1,4 +1,4 @@
-import bpy, json
+import bpy, json, re
 import numpy as np
 import importlib
 import sys, os
@@ -12,17 +12,27 @@ from joint_names import MOCAP_JOINT_NAMES, SMPL_JOINT_NAMES
 
 
 # ----------------- Main -----------------
-trial_num = "Trial_100"
-# output_dir = "../../data/processed_data"
-output_dir = "./"
+dataset_dir = "/home/siyuan/research/PoseFall/data/MoCap/Mocap_data"
+output_dir = "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
+
+if not os.path.exists(dataset_dir):
+    raise Exception(f'{dataset_dir} does not exist')
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+# get all .fbx files in the directory
+mocap_fbx_list = [os.path.join(dataset_dir, f) for f in os.listdir(dataset_dir) if f.endswith('.fbx')]
+mocap_fbx_list.sort()
+# need for for loop to loop through all the mocap data, but for now, just use one
+mocap_fbx_path = mocap_fbx_list[0] #/home/siyuan/research/PoseFall/data/MoCap/Mocap_data/Trial_100_Kate.fbx
+# use regex to match the trial number and actor name
+trial_num = re.search(r'Trial_(\d+)', mocap_fbx_path).group(1)
+actor_name = re.search(r'Trial_\d+_(\w+)', mocap_fbx_path).group(1)
+print(f"Start to process {actor_name}'s data in Trial {trial_num}")
+
 # load the mocap armature fbx 
 # mocap_fbx = "E:\Downloads\Falling_Dataset_Session2_100-115\Falling_Dataset_Session2_100-115\Trial_100\Kate.fbx"
-mocap_fbx = "/home/siyuan/research/PoseFall/data/MoCap/Kate.fbx"
-actor_name = mocap_fbx.split('/')[-1].split('.')[0]
-print(f'--- loading {actor_name} ---')
 MOCAP_JOINT_NAMES = [ f'{actor_name}:{name}' for name in MOCAP_JOINT_NAMES]
-
-bpy.ops.import_scene.fbx(filepath=mocap_fbx, automatic_bone_orientation = True)
+bpy.ops.import_scene.fbx(filepath=mocap_fbx_path, automatic_bone_orientation = True)
 print(f'--- {actor_name} loaded ---')
 # load the smpl armature from add-on
 bpy.data.window_managers["WinMan"].smpl_tool.smpl_gender = 'female'
@@ -42,9 +52,9 @@ scene = bpy.data.scenes['Scene']
 largest_frame = int(blender_utils.find_max_frame_in_actions())
 scene.frame_end = largest_frame
 scene.frame_start = 1
+print(f'--- Start to process Trial_{trial_num} ---')
 for frame in range(scene.frame_start, scene.frame_end):
     scene.frame_current = frame
-    print(f'--- processing frame {frame} ---')
     updated_flag = False
     # set them to the same location
     blender_utils.set_obj_location(smpl_armature.name, blender_utils.get_obj_location(mocap_armature.name))
@@ -58,7 +68,6 @@ for frame in range(scene.frame_start, scene.frame_end):
     smpl_armature.keyframe_insert(data_path="location", frame=frame)
     smpl_armature.keyframe_insert(data_path="rotation_euler", frame=frame)
     while(not updated_flag):
-        print(f'looping-----')
         blender_utils.update_smpl_rotation(smpl_armature.name, mocap_armature.name, MOCAP_JOINT_NAMES, SMPL_JOINT_NAMES)
         updated_smpl_param = np.array(blender_utils.get_all_global_bone_rot(smpl_armature.name))
         if np.array_equal(updated_smpl_param, curr_smpl_param):
@@ -80,7 +89,6 @@ for frame in range(scene.frame_start, scene.frame_end):
     arm_loc = np.array(obj_loc).flatten()
     bone_rot = np.array(bone_rot).flatten()
     # expand each joint's name into JOINT_x, JOINT_y, JOINT_z
-
     data = [int(frame), *arm_rot, *arm_loc, *bone_rot]
     dataset.append(data)
 
@@ -103,41 +111,8 @@ dataset = np.array(dataset)
 dataset = np.vstack((column_name, dataset))
 
 # save the dataset as csv
-save_path = os.path.join(output_dir, f'{trial_num}.csv')
+save_path = os.path.join(output_dir, f'Trial_{trial_num}.csv')
 np.savetxt(save_path, dataset, delimiter=',', fmt='%s')
+print(f'--- Trial_{trial_num} saved ---')
+blender_utils.reset_blender()
 
-
-# # remove everything
-# empty_scene()
-# # Create a new SMPL armature and let it move acccording to recorded data
-# bpy.data.window_managers["WinMan"].smpl_tool.smpl_gender = 'female'
-# bpy.ops.scene.smpl_add_gender()
-# smpl_armature = bpy.context.scene.objects['SMPL-female']
-
-# # from each frame, read the data and set the armature's rotation, location
-# # load the dataset
-# dataset = np.loadtxt(save_path, delimiter=',', dtype=str)
-# column_name = dataset[0]
-# dataset = dataset[1:]
-# # loop through each frame
-# for frame in dataset:
-#     # convert frame number from string to int
-#     frame_num = frame[0].astype(float)
-#     frame_num  = int(frame_num)
-#     # set the armature's object rotation
-#     arm_rot = frame[1:4].astype(float)
-#     # arm_rot = Euler(arm_rot, 'XYZ')
-#     set_obj_rotation(smpl_armature.name, arm_rot)
-#     # set the armature's object location
-#     arm_loc = frame[4:7].astype(float)
-#     set_obj_location(smpl_armature.name, arm_loc)
-#     # set the armature's bone rotation
-#     bone_rot = frame[7:].astype(float)
-#     bone_rot = bone_rot.reshape(-1, 3)
-#     set_all_local_bone_rot(smpl_armature.name, SMPL_JOINT_NAMES, bone_rot)
-#     # insert key frames here:
-#     smpl_armature.keyframe_insert(data_path="location", frame=frame_num)
-#     smpl_armature.keyframe_insert(data_path="rotation_euler", frame=frame_num)
-#     for bone_name in SMPL_JOINT_NAMES:
-#         bone = smpl_armature.pose.bones[bone_name]
-#         bone.keyframe_insert(data_path="rotation_euler", frame=frame_num)
