@@ -3,7 +3,7 @@ from torch.utils.data import Dataset
 from pathlib import Path
 import pandas as pd
 # import util functions from ./utils/utils.py
-from utils.utils import euler_angles_to_matrix, rotation_6d_to_matrix
+from utils.utils import euler_angles_to_matrix, matrix_to_rotation_6d
 
 class FallingData(Dataset):
     def __init__(self, data_path):
@@ -25,19 +25,23 @@ class FallingData(Dataset):
         trial_number = int(path.stem.split('_')[1])
         data = pd.read_csv(path)
         label = self.label[self.label['Trial Number'] == trial_number]
+        # process armature rotation
         arm_rot = torch.tensor(data[["arm_loc_x","arm_loc_y","arm_loc_z"]].values)
         print(f'length of this action: {len(data)}')
         # euler angles to rotation matrix
         arm_rot = euler_angles_to_matrix(arm_rot, "XYZ")
         # rotation matrix to 6D representation
-        arm_rot = rotation_6d_to_matrix(arm_rot)
-        print(f'arm_rot: {arm_rot.shape}')
-
-
+        arm_rot = matrix_to_rotation_6d(arm_rot)
+        # process bone rotation
+        bone_rot = torch.tensor(data.loc[:, "Pelvis_x":"R_Hand_z"].values) # shape(num_frames, 72)
+        bone_rot = bone_rot.reshape(-1, 24, 3)
+        bone_rot = euler_angles_to_matrix(bone_rot, "XYZ")
+        bone_rot = matrix_to_rotation_6d(bone_rot)
+        
         data_dict = {
-            "armature_rotation": torch.tensor(data[["arm_rot_x","arm_rot_y","arm_rot_z"]].values),
+            "armature_rotation": arm_rot,
             "armature_location": torch.tensor(data[["arm_loc_x","arm_loc_y","arm_loc_z"]].values),
-            "joint_rotation": torch.tensor(data.loc[:, "Pelvis_x":"R_Hand_z"].values),
+            "joint_rotation": bone_rot,
             "label": torch.tensor((label.values)[0, 1:]) # remove the first column, which is the trial number
         }
         
@@ -47,4 +51,4 @@ class FallingData(Dataset):
 data_path = "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
 dataset = FallingData(data_path)
 # print(f'length of dataset: {len(dataset)}')
-print(f'first item in dataset: {dataset[0]}')
+dataset[0]
