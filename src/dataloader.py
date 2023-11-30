@@ -2,7 +2,6 @@ import torch
 from torch.utils.data import Dataset
 from pathlib import Path
 import pandas as pd
-# import util functions from ./utils/utils.py
 from utils.utils import euler_angles_to_matrix, matrix_to_rotation_6d
 
 class FallingData(Dataset):
