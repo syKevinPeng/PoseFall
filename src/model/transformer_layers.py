@@ -121,160 +121,160 @@ class PositionwiseFeedForward(nn.Module):
         return self.pwff_layer(x_norm) + x
 
 
-# pylint: disable=arguments-differ
-class PositionalEncoding(nn.Module):
-    """
-    Pre-compute position encodings (PE).
-    In forward pass, this adds the position-encodings to the
-    input for as many time steps as necessary.
+# # pylint: disable=arguments-differ
+# class PositionalEncoding(nn.Module):
+#     """
+#     Pre-compute position encodings (PE).
+#     In forward pass, this adds the position-encodings to the
+#     input for as many time steps as necessary.
 
-    Implementation based on OpenNMT-py.
-    https://github.com/OpenNMT/OpenNMT-py
-    """
+#     Implementation based on OpenNMT-py.
+#     https://github.com/OpenNMT/OpenNMT-py
+#     """
 
-    def __init__(self,
-                 size: int = 0,
-                 max_len: int = 5000):
-        """
-        Positional Encoding with maximum length max_len
-        :param size:
-        :param max_len:
-        :param dropout:
-        """
-        if size % 2 != 0:
-            raise ValueError("Cannot use sin/cos positional encoding with "
-                             "odd dim (got dim={:d})".format(size))
-        pe = torch.zeros(max_len, size)
-        position = torch.arange(0, max_len).unsqueeze(1)
-        div_term = torch.exp((torch.arange(0, size, 2, dtype=torch.float) *
-                              -(math.log(10000.0) / size)))
-        pe[:, 0::2] = torch.sin(position.float() * div_term)
-        pe[:, 1::2] = torch.cos(position.float() * div_term)
-        pe = pe.unsqueeze(0)  # shape: [1, size, max_len]
-        super().__init__()
-        self.register_buffer('pe', pe)
-        self.dim = size
+#     def __init__(self,
+#                  size: int = 0,
+#                  max_len: int = 5000):
+#         """
+#         Positional Encoding with maximum length max_len
+#         :param size:
+#         :param max_len:
+#         :param dropout:
+#         """
+#         if size % 2 != 0:
+#             raise ValueError("Cannot use sin/cos positional encoding with "
+#                              "odd dim (got dim={:d})".format(size))
+#         pe = torch.zeros(max_len, size)
+#         position = torch.arange(0, max_len).unsqueeze(1)
+#         div_term = torch.exp((torch.arange(0, size, 2, dtype=torch.float) *
+#                               -(math.log(10000.0) / size)))
+#         pe[:, 0::2] = torch.sin(position.float() * div_term)
+#         pe[:, 1::2] = torch.cos(position.float() * div_term)
+#         pe = pe.unsqueeze(0)  # shape: [1, size, max_len]
+#         super().__init__()
+#         self.register_buffer('pe', pe)
+#         self.dim = size
 
-    def forward(self, emb):
-        """Embed inputs.
-        Args:
-            emb (FloatTensor): Sequence of word vectors
-                ``(seq_len, batch_size, self.dim)``
-        """
-        # Add position encodings
-        return emb + self.pe[:, :emb.size(1)]
-
-
-class TransformerEncoderLayer(nn.Module):
-    """
-    One Transformer encoder layer has a Multi-head attention layer plus
-    a position-wise feed-forward layer.
-    """
-
-    def __init__(self,
-                 size: int = 0,
-                 ff_size: int = 0,
-                 num_heads: int = 0,
-                 dropout: float = 0.1):
-        """
-        A single Transformer layer.
-        :param size:
-        :param ff_size:
-        :param num_heads:
-        :param dropout:
-        """
-        super().__init__()
-
-        self.layer_norm = nn.LayerNorm(size, eps=1e-6)
-        self.src_src_att = MultiHeadedAttention(num_heads, size,
-                                                dropout=dropout)
-        self.feed_forward = PositionwiseFeedForward(size, ff_size=ff_size,
-                                                    dropout=dropout)
-        self.dropout = nn.Dropout(dropout)
-        self.size = size
-
-    # pylint: disable=arguments-differ
-    def forward(self, x: Tensor, mask: Tensor) -> Tensor:
-        """
-        Forward pass for a single transformer encoder layer.
-        First applies layer norm, then self attention,
-        then dropout with residual connection (adding the input to the result),
-        and then a position-wise feed-forward layer.
-
-        :param x: layer input
-        :param mask: input mask
-        :return: output tensor
-        """
-        x_norm = self.layer_norm(x)
-        h = self.src_src_att(x_norm, x_norm, x_norm, mask)
-        h = self.dropout(h) + x
-        o = self.feed_forward(h)
-        return o
+#     def forward(self, emb):
+#         """Embed inputs.
+#         Args:
+#             emb (FloatTensor): Sequence of word vectors
+#                 ``(seq_len, batch_size, self.dim)``
+#         """
+#         # Add position encodings
+#         return emb + self.pe[:, :emb.size(1)]
 
 
-class TransformerDecoderLayer(nn.Module):
-    """
-    Transformer decoder layer.
+# class TransformerEncoderLayer(nn.Module):
+#     """
+#     One Transformer encoder layer has a Multi-head attention layer plus
+#     a position-wise feed-forward layer.
+#     """
 
-    Consists of self-attention, source-attention, and feed-forward.
-    """
+#     def __init__(self,
+#                  size: int = 0,
+#                  ff_size: int = 0,
+#                  num_heads: int = 0,
+#                  dropout: float = 0.1):
+#         """
+#         A single Transformer layer.
+#         :param size:
+#         :param ff_size:
+#         :param num_heads:
+#         :param dropout:
+#         """
+#         super().__init__()
 
-    def __init__(self,
-                 size: int = 0,
-                 ff_size: int = 0,
-                 num_heads: int = 0,
-                 dropout: float = 0.1):
-        """
-        Represents a single Transformer decoder layer.
+#         self.layer_norm = nn.LayerNorm(size, eps=1e-6)
+#         self.src_src_att = MultiHeadedAttention(num_heads, size,
+#                                                 dropout=dropout)
+#         self.feed_forward = PositionwiseFeedForward(size, ff_size=ff_size,
+#                                                     dropout=dropout)
+#         self.dropout = nn.Dropout(dropout)
+#         self.size = size
 
-        It attends to the source representation and the previous decoder states.
+#     # pylint: disable=arguments-differ
+#     def forward(self, x: Tensor, mask: Tensor) -> Tensor:
+#         """
+#         Forward pass for a single transformer encoder layer.
+#         First applies layer norm, then self attention,
+#         then dropout with residual connection (adding the input to the result),
+#         and then a position-wise feed-forward layer.
 
-        :param size: model dimensionality
-        :param ff_size: size of the feed-forward intermediate layer
-        :param num_heads: number of heads
-        :param dropout: dropout to apply to input
-        """
-        super().__init__()
-        self.size = size
+#         :param x: layer input
+#         :param mask: input mask
+#         :return: output tensor
+#         """
+#         x_norm = self.layer_norm(x)
+#         h = self.src_src_att(x_norm, x_norm, x_norm, mask)
+#         h = self.dropout(h) + x
+#         o = self.feed_forward(h)
+#         return o
 
-        self.trg_trg_att = MultiHeadedAttention(num_heads, size,
-                                                dropout=dropout)
-        self.src_trg_att = MultiHeadedAttention(num_heads, size,
-                                                dropout=dropout)
 
-        self.feed_forward = PositionwiseFeedForward(size, ff_size=ff_size,
-                                                    dropout=dropout)
+# class TransformerDecoderLayer(nn.Module):
+#     """
+#     Transformer decoder layer.
 
-        self.x_layer_norm = nn.LayerNorm(size, eps=1e-6)
-        self.dec_layer_norm = nn.LayerNorm(size, eps=1e-6)
+#     Consists of self-attention, source-attention, and feed-forward.
+#     """
 
-        self.dropout = nn.Dropout(dropout)
+#     def __init__(self,
+#                  size: int = 0,
+#                  ff_size: int = 0,
+#                  num_heads: int = 0,
+#                  dropout: float = 0.1):
+#         """
+#         Represents a single Transformer decoder layer.
 
-    # pylint: disable=arguments-differ
-    def forward(self,
-                x: Tensor = None,
-                memory: Tensor = None,
-                src_mask: Tensor = None,
-                trg_mask: Tensor = None) -> Tensor:
-        """
-        Forward pass of a single Transformer decoder layer.
+#         It attends to the source representation and the previous decoder states.
 
-        :param x: inputs
-        :param memory: source representations
-        :param src_mask: source mask
-        :param trg_mask: target mask (so as to not condition on future steps)
-        :return: output tensor
-        """
-        # decoder/target self-attention
-        x_norm = self.x_layer_norm(x)  # torch.Size([48, 183, 256])
-        h1 = self.trg_trg_att(x_norm, x_norm, x_norm, mask=trg_mask)
-        h1 = self.dropout(h1) + x
+#         :param size: model dimensionality
+#         :param ff_size: size of the feed-forward intermediate layer
+#         :param num_heads: number of heads
+#         :param dropout: dropout to apply to input
+#         """
+#         super().__init__()
+#         self.size = size
 
-        # source-target attention
-        h1_norm = self.dec_layer_norm(h1)  # torch.Size([48, 183, 256]) (same for memory)
-        h2 = self.src_trg_att(memory, memory, h1_norm, mask=src_mask)
+#         self.trg_trg_att = MultiHeadedAttention(num_heads, size,
+#                                                 dropout=dropout)
+#         self.src_trg_att = MultiHeadedAttention(num_heads, size,
+#                                                 dropout=dropout)
 
-        # final position-wise feed-forward layer
-        o = self.feed_forward(self.dropout(h2) + h1)
+#         self.feed_forward = PositionwiseFeedForward(size, ff_size=ff_size,
+#                                                     dropout=dropout)
 
-        return o
+#         self.x_layer_norm = nn.LayerNorm(size, eps=1e-6)
+#         self.dec_layer_norm = nn.LayerNorm(size, eps=1e-6)
+
+#         self.dropout = nn.Dropout(dropout)
+
+#     # pylint: disable=arguments-differ
+#     def forward(self,
+#                 x: Tensor = None,
+#                 memory: Tensor = None,
+#                 src_mask: Tensor = None,
+#                 trg_mask: Tensor = None) -> Tensor:
+#         """
+#         Forward pass of a single Transformer decoder layer.
+
+#         :param x: inputs
+#         :param memory: source representations
+#         :param src_mask: source mask
+#         :param trg_mask: target mask (so as to not condition on future steps)
+#         :return: output tensor
+#         """
+#         # decoder/target self-attention
+#         x_norm = self.x_layer_norm(x)  # torch.Size([48, 183, 256])
+#         h1 = self.trg_trg_att(x_norm, x_norm, x_norm, mask=trg_mask)
+#         h1 = self.dropout(h1) + x
+
+#         # source-target attention
+#         h1_norm = self.dec_layer_norm(h1)  # torch.Size([48, 183, 256]) (same for memory)
+#         h2 = self.src_trg_att(memory, memory, h1_norm, mask=src_mask)
+
+#         # final position-wise feed-forward layer
+#         o = self.feed_forward(self.dropout(h2) + h1)
+
+#         return o
