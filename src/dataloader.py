@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import Dataset
 from pathlib import Path
 import pandas as pd
-from utils.utils import euler_angles_to_matrix, matrix_to_rotation_6d
+from data_processing.utils import euler_angles_to_matrix, matrix_to_rotation_6d
 
 class FallingData(Dataset):
     def __init__(self, data_path):
@@ -26,7 +26,6 @@ class FallingData(Dataset):
         label = self.label[self.label['Trial Number'] == trial_number]
         # process armature rotation
         arm_rot = torch.tensor(data[["arm_loc_x","arm_loc_y","arm_loc_z"]].values)
-        print(f'length of this action: {len(data)}')
         # euler angles to rotation matrix
         arm_rot = euler_angles_to_matrix(arm_rot, "XYZ")
         # rotation matrix to 6D representation
@@ -38,10 +37,10 @@ class FallingData(Dataset):
         bone_rot = matrix_to_rotation_6d(bone_rot)
         
         data_dict = {
-            "armature_rotation": arm_rot,
-            "armature_location": torch.tensor(data[["arm_loc_x","arm_loc_y","arm_loc_z"]].values),
-            "joint_rotation": bone_rot,
-            "label": torch.tensor((label.values)[0, 1:]) # remove the first column, which is the trial number
+            "armature_rotation": arm_rot, # shape(num_frames, 6)
+            "armature_location": torch.tensor(data[["arm_loc_x","arm_loc_y","arm_loc_z"]].values), # shape(num_frames, 3)
+            "joint_rotation": bone_rot, # shape(num_frames, 24,6)
+            "label": torch.tensor((label.values)[0, 1:]) # remove the first column, which is the trial number; shape(32)
         }
         
         return data_dict
@@ -50,4 +49,7 @@ class FallingData(Dataset):
 data_path = "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
 dataset = FallingData(data_path)
 # print(f'length of dataset: {len(dataset)}')
-dataset[0]
+print(dataset[0]['armature_rotation'].size())
+print(dataset[0]['armature_location'].size())
+print(dataset[0]['joint_rotation'].size())
+print(dataset[0]['label'].size())

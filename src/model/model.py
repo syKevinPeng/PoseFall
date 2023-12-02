@@ -27,7 +27,7 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 
-class Encoder(nn.modules):
+class Encoder(nn.Module):
     """
     Encoder for the transformer model
     modified from https://github.com/Mathux/ACTOR/blob/master/src/models/architectures/transformer.py
@@ -35,9 +35,9 @@ class Encoder(nn.modules):
 
     def __init__(
         self,
-        latent_dim,
         num_classes,
-        num_att_layers=4,
+        latent_dim=256,
+        num_att_layers=8,
         num_heads=4,
         dim_feedforward=1024,
         dropout=0.1,
