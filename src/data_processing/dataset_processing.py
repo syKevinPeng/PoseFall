@@ -13,7 +13,7 @@ FRAME_RATE = 60 # 60 fps
 
 # ----------------- Main -----------------
 dataset_dir = "/home/siyuan/research/PoseFall/data/MoCap/Mocap_data/fbx_files"
-output_dir = "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
+output_dir = "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data/preprocessed_data"
 
 if not os.path.exists(dataset_dir):
     raise Exception(f'{dataset_dir} does not exist')

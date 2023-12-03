@@ -49,5 +49,25 @@ for file_path in json_list:
 annotations = [[key,*annotations_dicts[key]["Impact"], *annotations_dicts[key]["Glitch"], *annotations_dicts[key]["Fall"] ] for key in annotations_dicts.keys()]
 print(annotations[0])
 col_name = ["Trial Number", "Impact Start","Impact End", "Glitch Start","Glitch End","Fall Sart","Fall End"]
-annotations = pd.DataFrame(annotations, columns=col_name)
-print(annotations.head())
+annotations_df = pd.DataFrame(annotations, columns=col_name)
+print(annotations_df.head())
+
+# append phase information to the csv
+# read all preprocessed data
+preprocessed_data = sorted([f for f in (output_dir/"preprocessed_data").glob('Trial_*.csv')])
+for anno in annotations:
+    print(f'adding temporal information to trial {anno[0]}')
+    # read the preprocessed data
+    data = pd.read_csv(output_dir/"preprocessed_data"/f"Trial_{anno[0]}.csv")
+    # construct a new columns for phase information
+    phase_col = np.full(data.shape[0], "none")
+    # impact phase
+    phase_col[anno[1]:anno[2]+1] = "impact"
+    # glitch phase
+    phase_col[anno[3]:anno[4]+1] = "glitch"
+    # fall phase   
+    phase_col[anno[5]:anno[6]+1] = "fall"
+    data["phase"] = phase_col
+    print(data.head())
+    # save the new csv file
+    data.to_csv(output_dir/f"Trial_{anno[0]}.csv", index=False)
