@@ -26,4 +26,8 @@ for i_batch, (data_dict, data_list) in enumerate(dataloaders):
       glit_mask = data_dict['glit_src_key_padding_mask'].to(DEVICE)
       fall_mask = data_dict['fall_src_key_padding_mask'].to(DEVICE)
 
+      for label, pose, mask in zip([impa_label, glit_label, fall_label], [impact_poses, glit_poses, fall_poses], [impact_mask, glit_mask, fall_mask]):
+            # construct the transformer
+            # num_class = 
+            pass
       print(impact_mask.shape)

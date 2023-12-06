@@ -6,6 +6,9 @@ import pandas as pd
 from data_processing.utils import euler_angles_to_matrix, matrix_to_rotation_6d
 import numpy as np
 
+impact_phase_att = ["Impact Location", "Impact Attribute"] # full list: ["Impact Location", "Impact Attribute", "Impact Force"]
+glitch_phase_att = ["Glitch Attribute"] # full list: ["Glitch Speed", "Glitch Attribute"]
+fall_phase_att = ["Fall Attribute","End Postion"]
 
 class FallingData(Dataset):
     def __init__(self, data_path):
@@ -16,11 +19,22 @@ class FallingData(Dataset):
         self.label_path = Path(data_path) / "label.csv"
         if not self.label_path.exists():
             raise FileNotFoundError(f"{self.label_path} does not exist")
+        
+        # processing the label and only select needed col/attributes
         self.label = pd.read_csv(self.label_path)
+        label_col = self.label.columns.to_list()
+        impact_label = ["Trial Number"] + [col for col in label_col if any(col.startswith(att) for att in impact_phase_att)  ]
+        glitch_label = ["Trial Number"] +[col for col in label_col if any(col.startswith(att) for att in glitch_phase_att)  ]
+        fall_label = ["Trial Number"] + [col for col in label_col if any(col.startswith(att) for att in fall_phase_att)  ]
+        self.impact_label = self.label[impact_label]
+        self.glitch_label = self.label[glitch_label]
+        self.fall_label = self.label[fall_label]
 
         self.phase = ["impa", "glit", "fall"]
         # set the max frame length for each phase
         self.max_frame = {"impa": 120, "glit": 300, "fall": 100}
+
+        print(f'glitch label: {self.glitch_label.head()}')
 
     def __len__(self):
         return len(self.data_path)
@@ -30,18 +44,15 @@ class FallingData(Dataset):
         path = self.data_path[idx]
         trial_number = int(path.stem.split("_")[1])
         data = pd.read_csv(path)
-        label = self.label[self.label["Trial Number"] == trial_number]
-        # for idx, l in enumerate(label.columns):
-        #     print(f'{idx}: {l}')
-        np_label = label.to_numpy().flatten()
-        data_dict = {
-            "frame": np_label[0],
-            f"{self.phase[0]}_label": np_label[1:13],
-            f"{self.phase[1]}_label": np_label[13:24],
-            f"{self.phase[2]}_label": np_label[24:33],
+        # label = self.label[self.label["Trial Number"] == trial_number]
+
+        data_dict ={
+            "frame": torch.tensor(data["frame"].values),
+            "impa_label": torch.tensor(self.impact_label[self.impact_label["Trial Number"] == trial_number].iloc[:,1:].values),
+            "glit_label": torch.tensor(self.glitch_label[self.glitch_label["Trial Number"] == trial_number].iloc[:,1:].values),
+            "fall_label": torch.tensor(self.fall_label[self.fall_label["Trial Number"] == trial_number].iloc[:,1:].values),
         }
         # selec the data that contains action phase information
-        phase = data[["phase"]].to_numpy()
         combined_poses = []
         for phase in self.phase:
             data = data[data["phase"] == phase]
