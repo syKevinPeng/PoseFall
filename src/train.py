@@ -22,9 +22,8 @@ for i_batch, (data_dict, data_list) in enumerate(dataloaders):
       glit_poses = data_list[1].to(DEVICE)
       fall_poses = data_list[2].to(DEVICE) 
       # mask
-      print(data_dict.keys())
       impact_mask = data_dict['impa_src_key_padding_mask'].to(DEVICE)
       glit_mask = data_dict['glit_src_key_padding_mask'].to(DEVICE)
       fall_mask = data_dict['fall_src_key_padding_mask'].to(DEVICE)
 
-      print(impact_poses.shape)
+      print(impact_mask.shape)

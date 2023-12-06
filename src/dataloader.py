@@ -74,7 +74,7 @@ class FallingData(Dataset):
             arm_loc = torch.cat((arm_loc, torch.zeros((pad_length, 3))))
             bone_rot = torch.cat((bone_rot, torch.zeros((pad_length, 24, 6))))
 
-            # prepare padding mask for the data: positions with True is not allowed to attend while False values will be unchanged.
+            # prepare padding mask for the data: attend zero position
             arm_rot_padding_mask = torch.cat(
                 (torch.zeros((frame_length, 6)), torch.ones((pad_length, 6)))
             )
@@ -91,13 +91,14 @@ class FallingData(Dataset):
                 self.max_frame[phase], -1
             )  # shape(num_frames, 24,6) => shape(num_frames, 144)
 
-            data_dict[f"{phase}_src_key_padding_mask "] = torch.cat(
+            data_dict[f"{phase}_src_key_padding_mask"] = torch.cat(
                 (
                     arm_rot_padding_mask,
                     arm_loc_padding_mask,
                     bone_rot_padding_mask.reshape(self.max_frame[phase], -1),
                 ),
                 dim=1,
+                
             )  # shape(num_frames, 153)
             combined_pose = torch.cat(
                 (
