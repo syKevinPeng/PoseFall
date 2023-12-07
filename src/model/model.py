@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import nn, Tensor
 import numpy as np
-
+from icecream import ic
 
 # standard transformer Positional encoding from https://pytorch.org/tutorials/beginner/transformer_tutorial.html
 class PositionalEncoding(nn.Module):
@@ -36,6 +36,7 @@ class Encoder(nn.Module):
     def __init__(
         self,
         num_classes,
+        input_feature_dim=153,
         latent_dim=256,
         num_att_layers=8,
         num_heads=4,
@@ -54,6 +55,7 @@ class Encoder(nn.Module):
         self.dropout = dropout  # dropout rate
         self.activation = activation  # activation function
         self.num_att_layers = num_att_layers
+        self.input_feature_dim = input_feature_dim
 
         # motion distribution parameter tokens: used for pooling the temporal dimension
         self.muQuery = nn.Parameter(torch.randn(self.num_classes, self.latent_dim))
@@ -76,6 +78,24 @@ class Encoder(nn.Module):
 
         self.pos_encoder = PositionalEncoding(latent_dim)
 
-    def forward(self, batch):
-        data, label, mask = batch["data"], batch["label"], batch["mask"]
-        batch_size, num_joints, num_features, num_frames = data.shape
+        self.skelEmbedding = nn.Linear(self.input_feature_dim, self.latent_dim)
+
+    def forward(self, data, label, mask):
+        """
+        Arguments:
+            data: Tensor, shape ``[batch_size, seq_len, feature_dim]``
+            label: Tensor, shape ``[batch_size, num_classes]``
+            mask: Tensor, shape ``[batch_size, seq_len, feature_dim]``
+        """
+        ic(label.size())
+        ic(self.muQuery.size())
+        # human poses embedding
+        x = self.skelEmbedding(data)
+        # add mu and sigma queries
+        # select where the label is 1
+        # TODO: fix this
+        muQuery = self.muQuery[label == 1]
+        ic(muQuery.size())
+
+
+

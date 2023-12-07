@@ -34,7 +34,6 @@ class FallingData(Dataset):
         # set the max frame length for each phase
         self.max_frame = {"impa": 120, "glit": 300, "fall": 100}
 
-        print(f'glitch label: {self.glitch_label.head()}')
 
     def __len__(self):
         return len(self.data_path)
@@ -48,12 +47,11 @@ class FallingData(Dataset):
 
         data_dict ={
             "frame": torch.tensor(data["frame"].values),
-            "impa_label": torch.tensor(self.impact_label[self.impact_label["Trial Number"] == trial_number].iloc[:,1:].values),
-            "glit_label": torch.tensor(self.glitch_label[self.glitch_label["Trial Number"] == trial_number].iloc[:,1:].values),
-            "fall_label": torch.tensor(self.fall_label[self.fall_label["Trial Number"] == trial_number].iloc[:,1:].values),
+            "impa_label": torch.tensor(self.impact_label[self.impact_label["Trial Number"] == trial_number].iloc[:,1:].values).flatten(),
+            "glit_label": torch.tensor(self.glitch_label[self.glitch_label["Trial Number"] == trial_number].iloc[:,1:].values).flatten(),
+            "fall_label": torch.tensor(self.fall_label[self.fall_label["Trial Number"] == trial_number].iloc[:,1:].values).flatten(),
         }
         # selec the data that contains action phase information
-        combined_poses = []
         for phase in self.phase:
             data = data[data["phase"] == phase]
             # frame length
@@ -118,10 +116,11 @@ class FallingData(Dataset):
                     data_dict[f"{phase}_joint_rotation"],
                 ),
                 dim=1,
-            )
-            combined_poses.append(combined_pose)
+            ).float()
+            data_dict[f"{phase}_combined_poses"] = combined_pose    
 
-        return data_dict, combined_poses
+
+        return data_dict
 
 
 # test dataset works
