@@ -34,3 +34,4 @@ for i_batch, (data_dict) in enumerate(dataloaders):
             encoder = Encoder(num_classes=num_class).to(DEVICE)
             encoder(pose, label, mask)
             break
+      exit()

@@ -5,6 +5,7 @@ from torch import nn, Tensor
 import numpy as np
 from icecream import ic
 
+
 # standard transformer Positional encoding from https://pytorch.org/tutorials/beginner/transformer_tutorial.html
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
@@ -58,9 +59,9 @@ class Encoder(nn.Module):
         self.input_feature_dim = input_feature_dim
 
         # motion distribution parameter tokens: used for pooling the temporal dimension
-        self.muQuery = nn.Parameter(torch.randn(self.num_classes, self.latent_dim))
+        self.muQuery = nn.Parameter(torch.randn(self.num_classes, self.latent_dim, dtype=torch.float32))
 
-        self.sigmaQuery = nn.Parameter(torch.randn(self.num_classes, self.latent_dim))
+        self.sigmaQuery = nn.Parameter(torch.randn(self.num_classes, self.latent_dim, dtype=torch.float32))
 
         # standard transformer encoder
         # define one layer
@@ -87,15 +88,29 @@ class Encoder(nn.Module):
             label: Tensor, shape ``[batch_size, num_classes]``
             mask: Tensor, shape ``[batch_size, seq_len, feature_dim]``
         """
-        ic(label.size())
-        ic(self.muQuery.size())
+        batch_size = data.size(0)
         # human poses embedding
         x = self.skelEmbedding(data)
         # add mu and sigma queries
         # select where the label is 1
-        # TODO: fix this
-        muQuery = self.muQuery[label == 1]
-        ic(muQuery.size())
+        muQuery = torch.matmul(label, self.muQuery).unsqueeze(1)
+        sigmaQuery = torch.matmul(label, self.sigmaQuery).unsqueeze(1)
+        # add mu and sigma queries to the input
+        xseq = torch.cat((muQuery, sigmaQuery, x), dim=1)
+        ic(xseq.size())
+        # add positional encoding
+        xseq = self.pos_encoder(xseq) 
+        
+        # create a bigger mask to attend to mu and sigma
+        extra_mask = torch.zeros((batch_size, 2)).to(mask.device)
+        ic(extra_mask.size())
+        ic(mask.size())
+        # TODO: fix mask problem
+        mask_seq = torch.cat((extra_mask, mask), dim=1)
+        
+        encoder_output = self.trans_encoder(xseq, src_key_padding_mask=mask_seq.bool())
+        mu = encoder_output[0]
+        sigma = encoder_output[1]
 
-
-
+        print(encoder_output.size())
+        return mu, sigma

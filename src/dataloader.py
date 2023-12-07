@@ -47,9 +47,9 @@ class FallingData(Dataset):
 
         data_dict ={
             "frame": torch.tensor(data["frame"].values),
-            "impa_label": torch.tensor(self.impact_label[self.impact_label["Trial Number"] == trial_number].iloc[:,1:].values).flatten(),
-            "glit_label": torch.tensor(self.glitch_label[self.glitch_label["Trial Number"] == trial_number].iloc[:,1:].values).flatten(),
-            "fall_label": torch.tensor(self.fall_label[self.fall_label["Trial Number"] == trial_number].iloc[:,1:].values).flatten(),
+            "impa_label": torch.tensor(self.impact_label[self.impact_label["Trial Number"] == trial_number].iloc[:,1:].values, dtype=torch.float).flatten(),
+            "glit_label": torch.tensor(self.glitch_label[self.glitch_label["Trial Number"] == trial_number].iloc[:,1:].values, dtype=torch.float).flatten(),
+            "fall_label": torch.tensor(self.fall_label[self.fall_label["Trial Number"] == trial_number].iloc[:,1:].values, dtype=torch.float).flatten(),
         }
         # selec the data that contains action phase information
         for phase in self.phase:
