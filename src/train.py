@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from dataloader import FallingData
-from model.model import Encoder
+from model.model import Encoder, Decoder
+from model.CVAE import CAVE
 from icecream import ic
 
 # a simple train loop for development
@@ -32,6 +33,8 @@ for i_batch, (data_dict) in enumerate(dataloaders):
             num_class = label.size(1)
             # initialize the encoder
             encoder = Encoder(num_classes=num_class).to(DEVICE)
-            encoder(pose, label, mask)
+            model = CAVE(encoder, Decoder()).to(DEVICE)
+            batch = {'data': pose, 'label': label, 'mask': mask}
+            model(batch = batch)
             break
       exit()

@@ -82,13 +82,14 @@ class Encoder(nn.Module):
 
         self.skelEmbedding = nn.Linear(self.input_feature_dim, self.latent_dim)
 
-    def forward(self, data, label, mask):
+    def forward(self, batch):
         """
         Arguments:
             data: Tensor, shape ``[batch_size, seq_len, feature_dim]``
             label: Tensor, shape ``[batch_size, num_classes]``
             mask: Tensor, shape ``[batch_size, seq_len, feature_dim]``
         """
+        data, label, mask = batch['data'], batch['label'], batch['mask']
         batch_size = data.size(0)
         # human poses embedding
         x = self.skelEmbedding(data)
@@ -110,4 +111,13 @@ class Encoder(nn.Module):
         # get the first two output
         mu = encoder_output[:, 0, :]
         sigma = encoder_output[:, 1, :]
-        return mu, sigma
+        return {'mu': mu, 'sigma': sigma}
+    
+class Decoder(nn.Module):
+    """
+    Decoder for the transformer model
+    modified from
+    """
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        pass
