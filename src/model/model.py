@@ -71,9 +71,10 @@ class Encoder(nn.Module):
             dim_feedforward=self.dim_feedforward,
             dropout=self.dropout,
             activation=self.activation,
+            batch_first=True,
         )
         # define the entire encoder
-        trans_encoder = nn.TransformerEncoder(
+        self.trans_encoder = nn.TransformerEncoder(
             trans_layer, num_layers=self.num_att_layers
         )
 
@@ -91,7 +92,6 @@ class Encoder(nn.Module):
         batch_size = data.size(0)
         # human poses embedding
         x = self.skelEmbedding(data)
-        # expand mask to match the size of the input
         
         # add mu and sigma queries
         # select where the label is 1

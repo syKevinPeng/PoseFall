@@ -85,13 +85,7 @@ class FallingData(Dataset):
 
             # prepare padding mask for the data: attend zero position
             # TODO: simplify the padding mask
-            arm_rot_padding_mask = torch.cat(
-                (torch.zeros((frame_length)), torch.ones((pad_length)))
-            )
-            arm_loc_padding_mask = torch.cat(
-                (torch.zeros((frame_length)), torch.ones((pad_length)))
-            )
-            bone_rot_padding_mask = torch.cat(
+            src_key_padding_mask = torch.cat(
                 (torch.zeros((frame_length)), torch.ones((pad_length)))
             )
 
@@ -101,14 +95,7 @@ class FallingData(Dataset):
                 self.max_frame[phase], -1
             )  # shape(num_frames, 24,6) => shape(num_frames, 144)
 
-            data_dict[f"{phase}_src_key_padding_mask"] = torch.cat(
-                (
-                    arm_rot_padding_mask,
-                    arm_loc_padding_mask,
-                    bone_rot_padding_mask,
-                )
-                
-            )  # shape(num_frames, 153)
+            data_dict[f"{phase}_src_key_padding_mask"] = src_key_padding_mask # shape(num_frames,)
             combined_pose = torch.cat(
                 (
                     data_dict[f"{phase}_armature_location"],
