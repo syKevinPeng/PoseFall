@@ -1,3 +1,4 @@
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -118,6 +119,53 @@ class Decoder(nn.Module):
     Decoder for the transformer model
     modified from
     """
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        pass
+    def __init__(self,num_classes, input_feature_dim=153, latent_dim = 256, num_heads = 4, dim_feedforward = 1024, num_layers = 4, dropout=0.1, activation="gelu") -> None:
+        super().__init__()
+        self.num_classes = num_classes
+        self.latent_dim = latent_dim  
+        self.num_heads = num_heads
+        self.dim_feedforward=dim_feedforward
+        self.num_layers = num_layers
+        self.dropout = dropout
+        self.activation = activation
+        self.pos_encoder = PositionalEncoding(latent_dim)
+        self.input_feats = input_feature_dim
+
+        self.action_biases = nn.Parameter(torch.randn(self.num_classes, self.latent_dim))
+
+        self.trans_layer = nn.TransformerDecoderLayer(
+            d_model=self.latent_dim,
+            nhead=self.num_heads,
+            dim_feedforward=self.dim_feedforward,
+            dropout=self.dropout,
+            activation=self.activation,
+            batch_first=True,
+        )
+
+        self.trans_decoder = nn.TransformerDecoder(self.trans_layer, 
+                                                   num_layers=self.num_layers)
+        self.final_layer = nn.Linear(self.latent_dim, self.input_feats)
+
+    
+    def forward(self, batch):
+        z, y, mask, lengths = batch['z'], batch['label'], batch['mask'], batch['lengths']
+        latent_dim = z.size(1)
+        batch_size, num_frames = mask.shape
+        # shift the latent noise vector to be the action noise
+        z = z + y @ self.action_biases
+        # z is sequence of size 1
+        z = z.unsqueeze(1)
+        # time queries
+        timequeries = torch.zeros(batch_size, num_frames, latent_dim, device=z.device)
+        # sequence encoding
+        timequeries = self.pos_encoder(timequeries)
+
+        # decode
+        decoder_output = self.trans_decoder(tgt = timequeries, memory=z, tgt_key_padding_mask=mask.bool())
+        # get output sequences
+        output = self.final_layer(decoder_output).reshape(batch_size, num_frames, -1)
+
+        # TODO: remove the padding using mask information
+        print(mask)
+        batch["output"] = output
+        return batch
