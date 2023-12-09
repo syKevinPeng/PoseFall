@@ -107,8 +107,7 @@ class Encoder(nn.Module):
         mask_seq = torch.cat((extra_mask, mask), dim=1)
         
         encoder_output = self.trans_encoder(xseq, src_key_padding_mask=mask_seq.bool())
-        mu = encoder_output[0]
-        sigma = encoder_output[1]
-
-        print(encoder_output.size())
+        # get the first two output
+        mu = encoder_output[:, 0, :]
+        sigma = encoder_output[:, 1, :]
         return mu, sigma
