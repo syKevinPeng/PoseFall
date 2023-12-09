@@ -91,21 +91,19 @@ class Encoder(nn.Module):
         batch_size = data.size(0)
         # human poses embedding
         x = self.skelEmbedding(data)
+        # expand mask to match the size of the input
+        
         # add mu and sigma queries
         # select where the label is 1
         muQuery = torch.matmul(label, self.muQuery).unsqueeze(1)
         sigmaQuery = torch.matmul(label, self.sigmaQuery).unsqueeze(1)
         # add mu and sigma queries to the input
         xseq = torch.cat((muQuery, sigmaQuery, x), dim=1)
-        ic(xseq.size())
         # add positional encoding
         xseq = self.pos_encoder(xseq) 
         
         # create a bigger mask to attend to mu and sigma
         extra_mask = torch.zeros((batch_size, 2)).to(mask.device)
-        ic(extra_mask.size())
-        ic(mask.size())
-        # TODO: fix mask problem
         mask_seq = torch.cat((extra_mask, mask), dim=1)
         
         encoder_output = self.trans_encoder(xseq, src_key_padding_mask=mask_seq.bool())
