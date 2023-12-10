@@ -29,10 +29,16 @@ class CAVE(nn.Module):
     def forward(self, batch):
         # encode
         batch.update(self.encoder(batch))
+        # reparameterize
         batch["z"] = self.reparameterize(batch)
-        print(batch["z"].shape)
         # decode
-        ic()
         batch.update(self.decoder(batch))
 
         return 
+    
+    def return_latent(self, batch):
+        # encode
+        batch.update(self.encoder(batch))
+        # reparameterize
+        batch["z"] = self.reparameterize(batch)
+        return batch["z"]
