@@ -1,8 +1,12 @@
+from ast import parse
 from turtle import forward
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from .smpl_model import SMPLModel
 from icecream import ic
+
+
 
 
 class CAVE(nn.Module):
@@ -34,7 +38,7 @@ class CAVE(nn.Module):
         # decode
         batch.update(self.decoder(batch))
 
-        return 
+        return batch
     
     def return_latent(self, batch):
         # encode
@@ -42,3 +46,44 @@ class CAVE(nn.Module):
         # reparameterize
         batch["z"] = self.reparameterize(batch)
         return batch["z"]
+    
+    def compute_loss(self, batch):
+        pred_batch = batch["output"]
+        input_batch = batch["data"]
+        mask_batch = batch["mask"]
+
+        ic(pred_batch.shape)
+        ic(input_batch.shape)
+        ic(mask_batch.shape)
+
+        padding = mask_batch.bool().unsqueeze(-1).expand(-1, -1, pred_batch.size(-1))
+        input_batch[padding] = 0
+        pred_batch[padding] = 0
+
+        # human model param l2 loss
+        human_model_loss = F.mse_loss(pred_batch, input_batch, reduction="none")
+
+        # KL divergence loss
+        mu, logvar = batch["mu"], batch["sigma"]
+        kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)
+
+        # vertex loss
+        # initialize SMPL model
+        smpl_model = SMPLModel()
+        # get the vertex locations
+        vertex_locs = smpl_model(pred_batch)
+
+        # loss weight
+        loss_weight = {
+            "human_model_loss": 1,
+            "kl_loss": 1,
+            "vertex_loss": 1,
+        }
+
+        # compute loss
+        total_loss = \
+            loss_weight["human_model_loss"] * human_model_loss +\
+            loss_weight["kl_loss"] * kl_loss +\
+            loss_weight["vertex_loss"] * vertex_locs
+        
+        return total_loss.mean()

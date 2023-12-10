@@ -105,3 +105,16 @@ def euler_angles_to_matrix(euler_angles, convention: str):
             raise ValueError(f"Invalid letter {letter} in convention string.")
     matrices = map(_axis_angle_rotation, convention, torch.unbind(euler_angles, -1))
     return functools.reduce(torch.matmul, matrices)
+
+def parse_output(sequences):
+    """
+    Parse the output from the model
+    @param sequences: Tensor, shape (batch_size, seq_len, feature_dim=153 )
+    """
+    batch_size, seq_len, feature_dim = sequences.shape
+    arm_rot = sequences[:, :, :6]
+    arm_loc = sequences[:, :, 6:9]
+    bone_rot = sequences[:, :, 9:].reshape(batch_size,-1, 24, 6)
+
+    return {'arm_rot': arm_rot, 'arm_loc': arm_loc, 'bone_rot': bone_rot}
+

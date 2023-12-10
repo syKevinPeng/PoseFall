@@ -47,12 +47,12 @@ for i_batch, (data_dict) in enumerate(dataloaders):
       # initialize the encoder
       encoder = Encoder(num_classes=num_class).to(DEVICE)
       decoder  = Decoder(num_classes=num_class).to(DEVICE)
-      ic()
       model = CAVE(encoder, decoder).to(DEVICE)
       batch = {
             'data': impact_poses, 
             'label': impa_label, 
             'mask': impact_mask, 
             "lengths": impact_length}
-      model(batch = batch)
+      batch = model(batch = batch)
+      loss = model.compute_loss(batch)
       break
