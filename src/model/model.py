@@ -165,7 +165,9 @@ class Decoder(nn.Module):
         # get output sequences
         output = self.final_layer(decoder_output).reshape(batch_size, num_frames, -1)
 
-        # TODO: remove the padding using mask information
-        print(mask)
+        # setting zero for padded area
+        # expand the mask to the output size
+        padding = mask.bool().unsqueeze(-1).expand(-1, -1, output.size(-1))
+        output[padding] = 0
         batch["output"] = output
         return batch
