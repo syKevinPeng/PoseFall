@@ -45,7 +45,7 @@ class Encoder(nn.Module):
         dim_feedforward=1024,
         dropout=0.1,
         activation="gelu",
-    ):
+    ): 
         super(Encoder, self).__init__()
         self.latent_dim = latent_dim  # latent dimension
         self.num_classes = num_classes
@@ -102,13 +102,13 @@ class Encoder(nn.Module):
         # add mu and sigma queries to the input
         xseq = torch.cat((muQuery, sigmaQuery, x), dim=1)
         # add positional encoding
-        xseq = self.pos_encoder(xseq) 
+        encoded_xseq = self.pos_encoder(xseq) 
         
         # create a bigger mask to attend to mu and sigma
         extra_mask = torch.zeros((batch_size, 2)).to(mask.device)
         mask_seq = torch.cat((extra_mask, mask), dim=1)
         
-        encoder_output = self.trans_encoder(xseq, src_key_padding_mask=mask_seq.bool())
+        encoder_output = self.trans_encoder(encoded_xseq, src_key_padding_mask=mask_seq.bool())
         # get the first two output
         mu = encoder_output[:, 0, :]
         sigma = encoder_output[:, 1, :]
@@ -152,22 +152,22 @@ class Decoder(nn.Module):
         latent_dim = z.size(1)
         batch_size, num_frames = mask.shape
         # shift the latent noise vector to be the action noise
-        z = z + y @ self.action_biases
+        shifted_z = z + y @ self.action_biases
         # z is sequence of size 1
-        z = z.unsqueeze(1)
+        shifted_z = shifted_z.unsqueeze(1)
         # time queries
-        timequeries = torch.zeros(batch_size, num_frames, latent_dim, device=z.device)
+        timequeries = torch.zeros(batch_size, num_frames, latent_dim, device=shifted_z.device)
         # sequence encoding
         timequeries = self.pos_encoder(timequeries)
 
         # decode
-        decoder_output = self.trans_decoder(tgt = timequeries, memory=z, tgt_key_padding_mask=mask.bool())
+        decoder_output = self.trans_decoder(tgt = timequeries, memory=shifted_z, tgt_key_padding_mask=mask.bool())
         # get output sequences
         output = self.final_layer(decoder_output).reshape(batch_size, num_frames, -1)
 
         # setting zero for padded area
         # expand the mask to the output size
-        padding = mask.bool().unsqueeze(-1).expand(-1, -1, output.size(-1))
-        output[padding] = 0
+        # padding = mask.bool().unsqueeze(-1).expand(-1, -1, output.size(-1))
+        # output[padding] = 0
         batch["output"] = output
         return batch

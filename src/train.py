@@ -7,12 +7,24 @@ from model.CVAE import CAVE
 from icecream import ic
 
 # a simple train loop for development
+torch.autograd.set_detect_anomaly(True)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 data = FallingData("/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data")
 dataloaders = torch.utils.data.DataLoader(data, batch_size=1, shuffle=True, num_workers=0)
+
+# define optimizer 
+num_class = 9
+# num_class = impa_label.size(1)
+# initialize the encoder
+encoder = Encoder(num_classes=num_class).to(DEVICE)
+decoder  = Decoder(num_classes=num_class).to(DEVICE)
+model = CAVE(encoder, decoder).to(DEVICE)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+
 for i_batch, (data_dict) in enumerate(dataloaders):
+      optimizer.zero_grad()
       # labels
       impa_label = data_dict['impa_label'].to(DEVICE)
       glit_label = data_dict['glit_label'].to(DEVICE)
@@ -43,11 +55,7 @@ for i_batch, (data_dict) in enumerate(dataloaders):
 
       # build impact only
       # construct the transformer
-      num_class = impa_label.size(1)
-      # initialize the encoder
-      encoder = Encoder(num_classes=num_class).to(DEVICE)
-      decoder  = Decoder(num_classes=num_class).to(DEVICE)
-      model = CAVE(encoder, decoder).to(DEVICE)
+
       batch = {
             'data': impact_poses, 
             'label': impa_label, 
@@ -55,4 +63,6 @@ for i_batch, (data_dict) in enumerate(dataloaders):
             "lengths": impact_length}
       batch = model(batch = batch)
       loss = model.compute_loss(batch)
-      break
+      loss.backward()
+      optimizer.step()
+      ic(loss.item())

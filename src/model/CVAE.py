@@ -49,12 +49,15 @@ class CAVE(nn.Module):
     
     def compute_loss(self, batch):
         pred_batch = batch["output"]
-        input_batch = batch["data"]
+        input_batch = torch.clone(batch["data"])
         mask_batch = batch["mask"]
 
         padding = mask_batch.bool().unsqueeze(-1).expand(-1, -1, pred_batch.size(-1))
         input_batch[padding] = 0
         pred_batch[padding] = 0
+
+        ic(input_batch)
+        ic(mask_batch)
 
         # human model param l2 loss
         human_model_loss = human_param_loss(pred_batch, input_batch)

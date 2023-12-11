@@ -83,7 +83,7 @@ class FallingData(Dataset):
             arm_loc = torch.cat((arm_loc, torch.zeros((pad_length, 3))))
             bone_rot = torch.cat((bone_rot, torch.zeros((pad_length, 24, 6))))
 
-            # prepare padding mask for the data: attend zero position
+            # prepare padding mask for the data: attend zero position and ignore zeros
             # TODO: simplify the padding mask
             src_key_padding_mask = torch.cat(
                 (torch.zeros((frame_length)), torch.ones((pad_length)))
