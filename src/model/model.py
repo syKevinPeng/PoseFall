@@ -38,6 +38,7 @@ class Encoder(nn.Module):
     def __init__(
         self,
         num_classes,
+        phase_names,
         input_feature_dim=153,
         latent_dim=256,
         num_att_layers=8,
@@ -45,8 +46,9 @@ class Encoder(nn.Module):
         dim_feedforward=1024,
         dropout=0.1,
         activation="gelu",
-    ): 
+    ):
         super(Encoder, self).__init__()
+        self.phase_names = phase_names
         self.latent_dim = latent_dim  # latent dimension
         self.num_classes = num_classes
         # transformer parameters
@@ -60,9 +62,13 @@ class Encoder(nn.Module):
         self.input_feature_dim = input_feature_dim
 
         # motion distribution parameter tokens: used for pooling the temporal dimension
-        self.muQuery = nn.Parameter(torch.randn(self.num_classes, self.latent_dim, dtype=torch.float32))
+        self.muQuery = nn.Parameter(
+            torch.randn(self.num_classes, self.latent_dim, dtype=torch.float32)
+        )
 
-        self.sigmaQuery = nn.Parameter(torch.randn(self.num_classes, self.latent_dim, dtype=torch.float32))
+        self.sigmaQuery = nn.Parameter(
+            torch.randn(self.num_classes, self.latent_dim, dtype=torch.float32)
+        )
 
         # standard transformer encoder
         # define one layer
@@ -90,11 +96,11 @@ class Encoder(nn.Module):
             label: Tensor, shape ``[batch_size, num_classes]``
             mask: Tensor, shape ``[batch_size, seq_len, feature_dim]``
         """
-        data, label, mask = batch['data'], batch['label'], batch['mask']
+        data, label, mask = batch[f"{self.phase_names}_data"], batch[f"{self.phase_names}_label"], batch[f"{self.phase_names}_mask"]
         batch_size = data.size(0)
         # human poses embedding
         x = self.skelEmbedding(data)
-        
+
         # add mu and sigma queries
         # select where the label is 1
         muQuery = torch.matmul(label, self.muQuery).unsqueeze(1)
@@ -102,36 +108,54 @@ class Encoder(nn.Module):
         # add mu and sigma queries to the input
         xseq = torch.cat((muQuery, sigmaQuery, x), dim=1)
         # add positional encoding
-        encoded_xseq = self.pos_encoder(xseq) 
-        
+        encoded_xseq = self.pos_encoder(xseq)
+
         # create a bigger mask to attend to mu and sigma
         extra_mask = torch.zeros((batch_size, 2)).to(mask.device)
         mask_seq = torch.cat((extra_mask, mask), dim=1)
-        
-        encoder_output = self.trans_encoder(encoded_xseq, src_key_padding_mask=mask_seq.bool())
+
+        encoder_output = self.trans_encoder(
+            encoded_xseq, src_key_padding_mask=mask_seq.bool()
+        )
         # get the first two output
         mu = encoder_output[:, 0, :]
         sigma = encoder_output[:, 1, :]
-        return {'mu': mu, 'sigma': sigma}
-    
+        return {f"{self.phase_names}_mu": mu, f"{self.phase_names}_sigma": sigma}
+
+
 class Decoder(nn.Module):
     """
     Decoder for the transformer model
     modified from
     """
-    def __init__(self,num_classes, input_feature_dim=153, latent_dim = 256, num_heads = 4, dim_feedforward = 1024, num_layers = 4, dropout=0.1, activation="gelu") -> None:
+
+    def __init__(
+        self,
+        num_classes,
+        phase_names,
+        input_feature_dim=153,
+        latent_dim=256,
+        num_heads=4,
+        dim_feedforward=1024,
+        num_layers=4,
+        dropout=0.1,
+        activation="gelu",
+    ) -> None:
         super().__init__()
+        self.phase_names = phase_names
         self.num_classes = num_classes
-        self.latent_dim = latent_dim  
+        self.latent_dim = latent_dim
         self.num_heads = num_heads
-        self.dim_feedforward=dim_feedforward
+        self.dim_feedforward = dim_feedforward
         self.num_layers = num_layers
         self.dropout = dropout
         self.activation = activation
         self.pos_encoder = PositionalEncoding(latent_dim)
         self.input_feats = input_feature_dim
 
-        self.action_biases = nn.Parameter(torch.randn(self.num_classes, self.latent_dim))
+        self.action_biases = nn.Parameter(
+            torch.randn(self.num_classes, self.latent_dim)
+        )
 
         self.trans_layer = nn.TransformerDecoderLayer(
             d_model=self.latent_dim,
@@ -142,13 +166,18 @@ class Decoder(nn.Module):
             batch_first=True,
         )
 
-        self.trans_decoder = nn.TransformerDecoder(self.trans_layer, 
-                                                   num_layers=self.num_layers)
+        self.trans_decoder = nn.TransformerDecoder(
+            self.trans_layer, num_layers=self.num_layers
+        )
         self.final_layer = nn.Linear(self.latent_dim, self.input_feats)
 
-    
     def forward(self, batch):
-        z, y, mask, lengths = batch['z'], batch['label'], batch['mask'], batch['lengths']
+        z, y, mask, lengths = (
+            batch[f"{self.phase_names}_z"],
+            batch[f"{self.phase_names}_label"],
+            batch[f"{self.phase_names}_mask"],
+            batch[f"{self.phase_names}_lengths"],
+        )
         latent_dim = z.size(1)
         batch_size, num_frames = mask.shape
         # shift the latent noise vector to be the action noise
@@ -156,12 +185,16 @@ class Decoder(nn.Module):
         # z is sequence of size 1
         shifted_z = shifted_z.unsqueeze(1)
         # time queries
-        timequeries = torch.zeros(batch_size, num_frames, latent_dim, device=shifted_z.device)
+        timequeries = torch.zeros(
+            batch_size, num_frames, latent_dim, device=shifted_z.device
+        )
         # sequence encoding
         timequeries = self.pos_encoder(timequeries)
 
         # decode
-        decoder_output = self.trans_decoder(tgt = timequeries, memory=shifted_z, tgt_key_padding_mask=mask.bool())
+        decoder_output = self.trans_decoder(
+            tgt=timequeries, memory=shifted_z, tgt_key_padding_mask=mask.bool()
+        )
         # get output sequences
         output = self.final_layer(decoder_output).reshape(batch_size, num_frames, -1)
 
@@ -169,5 +202,5 @@ class Decoder(nn.Module):
         # expand the mask to the output size
         # padding = mask.bool().unsqueeze(-1).expand(-1, -1, output.size(-1))
         # output[padding] = 0
-        batch["output"] = output
+        batch[f"{self.phase_names}_output"] = output
         return batch
