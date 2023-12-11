@@ -71,12 +71,15 @@ class CAVE(nn.Module):
         # initialize SMPL model
         smpl_model = SMPLModel()
         # get the vertex locations
-        vertex_locs = smpl_model(pred_batch)
+        pred_vertex_locs = smpl_model(pred_batch)
+        gt_vertex_locs = smpl_model(input_batch)
+        # compute the vertex loss
+        vertex_locs = F.mse_loss(pred_vertex_locs, gt_vertex_locs, reduction="none")
 
         # loss weight
         loss_weight = {
             "human_model_loss": 1,
-            "kl_loss": 1,
+            "kl_loss": 1e-5,
             "vertex_loss": 1,
         }
 
