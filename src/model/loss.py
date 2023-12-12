@@ -42,7 +42,7 @@ def human_param_loss(pred_batch, input_batch):
     human model param l2 loss. Note that this contains the armature rotation, translation as well as the 
     bone rotation.
     """
-    return F.mse_loss(pred_batch, input_batch, reduction="sum")
+    return F.mse_loss(pred_batch, input_batch, reduction="mean")
 
 def kl_divergence(mu, logvar):
     """
@@ -55,10 +55,10 @@ def vertex_loss(pred_batch, input_batch):
     vertex loss: we ignore the translation and rotation of the armature. Only calculate the vertex transformation
     """
     # initialize SMPL model
-    smpl_model = SMPLModel()
+    smpl_model = SMPLModel().eval().to(DEVICE)
     # get the vertex locations
     pred_vertex_locs = smpl_model(pred_batch)
     gt_vertex_locs = smpl_model(input_batch)
     # compute the vertex loss
-    vertex_locs = F.mse_loss(pred_vertex_locs, gt_vertex_locs, reduction="sum")
+    vertex_locs = F.mse_loss(pred_vertex_locs, gt_vertex_locs, reduction="mean")
     return vertex_locs

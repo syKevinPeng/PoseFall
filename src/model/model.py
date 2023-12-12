@@ -1,3 +1,6 @@
+"""
+This file contains the encoder and decoder for the transformer model. The actual model is in CVAE.py 
+"""
 import time
 import torch
 import torch.nn as nn
@@ -124,7 +127,10 @@ class Encoder(nn.Module):
         mu = encoder_output[:, 0, :]
         sigma = encoder_output[:, 1, :]
         return {f"{self.phase_names}_mu": mu, f"{self.phase_names}_sigma": sigma}
-
+        
+        # instead of returning mu and sigma, return the entire encoder output
+        # ic(encoder_output.size())
+        # return {f"{self.phase_names}_encoder_output": encoder_output}
 
 class Decoder(nn.Module):
     """

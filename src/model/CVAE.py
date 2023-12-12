@@ -1,3 +1,6 @@
+"""
+This file contains CVAE model. Refer to model.py for the encoder and decoder
+"""
 from ast import parse
 from turtle import forward
 import torch
@@ -53,11 +56,24 @@ class CAVE(nn.Module):
         return batch
 
     def forward(self, batch):
+        batch_size = batch[f"{self.phase_names[0]}_combined_poses"].size(0)
         batch = self.prepare_batch(batch)
+        encoder_output_list = []
         for phase in self.phase_names:
             # Encoder
             encoder_output = getattr(self, f"{phase}_encoder")(batch)
+            encoder_output_list.extend([encoder_output[f"{phase}_mu"], encoder_output[f"{phase}_sigma"]])
             batch.update(encoder_output)
+
+        # fuse the encoder output by concate output layers and project to 3 mus and 3 sigmas
+        concated_output = torch.cat(encoder_output_list, dim=1).to(self.device)
+        fuse_layer = nn.Linear(concated_output.size(1), concated_output.size(1)).to(self.device)
+        fused_output = fuse_layer(concated_output).reshape(batch_size, 6, -1)
+        # assign mu and sigma back to the batch
+        for i, phase in enumerate(self.phase_names):
+            batch[f"{phase}_mu"] = fused_output[:, 2*i, :]
+            batch[f"{phase}_sigma"] = fused_output[:, 2*i+1, :]
+            
         for phase in self.phase_names:
             # reparameterize
             batch[f"{phase}_z"] = self.reparameterize(batch, phase_name=phase)
