@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 from data_processing.utils import euler_angles_to_matrix, matrix_to_rotation_6d
 import numpy as np
+from icecream import ic
 
 impact_phase_att = ["Impact Location", "Impact Attribute"] # full list: ["Impact Location", "Impact Attribute", "Impact Force"]
 glitch_phase_att = ["Glitch Attribute"] # full list: ["Glitch Speed", "Glitch Attribute"]
@@ -32,7 +33,7 @@ class FallingData(Dataset):
 
         self.phase = ["impa", "glit", "fall"]
         # set the max frame length for each phase
-        self.max_frame = {"impa": 120, "glit": 300, "fall": 100}
+        self.max_frame = {"impa": 120, "glit": 350, "fall": 400}
 
 
     def __len__(self):
@@ -42,8 +43,7 @@ class FallingData(Dataset):
         # TODO: reset the starting location of the armature to be the origin
         path = self.data_path[idx]
         trial_number = int(path.stem.split("_")[1])
-        data = pd.read_csv(path)
-        # label = self.label[self.label["Trial Number"] == trial_number]
+        data = pd.read_csv(path, header=0)
 
         data_dict ={
             "frame": torch.tensor(data["frame"].values),
@@ -53,21 +53,24 @@ class FallingData(Dataset):
         }
         # selec the data that contains action phase information
         for phase in self.phase:
-            data = data[data["phase"] == phase]
+            phase_data = data[data["phase"] == phase]
             # frame length
-            frame_length = len(data)
+            frame_length = len(phase_data)
+            if frame_length == 0:
+                ic(phase_data.head())
+                raise ValueError(f"{phase} frame length is 0. Data path is {path}")
             # process armature rotation
-            arm_rot = torch.tensor(data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]].values)
+            arm_rot = torch.tensor(phase_data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]].values)
             # euler angles to rotation matrix
             arm_rot = euler_angles_to_matrix(arm_rot, "XYZ")
             # rotation matrix to 6D representation
             arm_rot = matrix_to_rotation_6d(arm_rot)
 
             # armature location
-            arm_loc = torch.tensor(data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]].values)
+            arm_loc = torch.tensor(phase_data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]].values)
             # process bone rotation
             bone_rot = torch.tensor(
-                data.loc[:, "Pelvis_x":"R_Hand_z"].values
+                phase_data.loc[:, "Pelvis_x":"R_Hand_z"].values
             )  # shape(num_frames, 72)
             bone_rot = bone_rot.reshape(-1, 24, 3)
             bone_rot = euler_angles_to_matrix(bone_rot, "XYZ")
@@ -83,12 +86,19 @@ class FallingData(Dataset):
             arm_loc = torch.cat((arm_loc, torch.zeros((pad_length, 3))))
             bone_rot = torch.cat((bone_rot, torch.zeros((pad_length, 24, 6))))
 
-            # prepare padding mask for the data: attend zero position and ignore zeros
+            # prepare padding mask for the data: attend zero position and ignore none-zeros
             # TODO: simplify the padding mask
             src_key_padding_mask = torch.cat(
                 (torch.zeros((frame_length)), torch.ones((pad_length)))
             )
-
+            # sanity check if the padding mask are not all ones
+            if torch.all(src_key_padding_mask == 1):
+                ic(frame_length)
+                ic(pad_length)
+                ic(src_key_padding_mask)
+                raise ValueError(
+                    f"{phase} src_key_padding_mask is all ones, please check"
+                )
             data_dict[f"{phase}_armature_rotation"] = arm_rot  # shape(num_frames, 6)
             data_dict[f"{phase}_armature_location"] = arm_loc  # shape(num_frames, 3)
             data_dict[f"{phase}_joint_rotation"] = bone_rot.reshape(

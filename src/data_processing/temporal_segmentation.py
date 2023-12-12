@@ -30,13 +30,6 @@ for file_path in json_list:
     # get the trial number
     trial_number = re.search(r'Trial_(\d+)', file_path.stem).group(1)
     print(f"Start to process Trial {trial_number}")
-    # annotation = [str(trial_number),
-    #                 data["annotations"][0]["name"], # attribute
-    #                 *data["annotations"][0]["ranges"][0], # ranges
-    #                 data["annotations"][1]["name"], # attribute 
-    #                 *data["annotations"][1]["ranges"][0], # ranges
-    #                 data["annotations"][2]["name"], # attribute
-    #                 *data["annotations"][2]["ranges"][0]] # ranges
     annotation = {trial_number:{
                                         data["annotations"][0]["name"]:data["annotations"][0]["ranges"][0],
                                         data["annotations"][1]["name"]:data["annotations"][1]["ranges"][0],
@@ -47,11 +40,20 @@ for file_path in json_list:
 
 # convert to csv
 annotations = [[key,*annotations_dicts[key]["Impact"], *annotations_dicts[key]["Glitch"], *annotations_dicts[key]["Fall"] ] for key in annotations_dicts.keys()]
-print(annotations[0])
 col_name = ["Trial Number", "Impact Start","Impact End", "Glitch Start","Glitch End","Fall Sart","Fall End"]
 annotations_df = pd.DataFrame(annotations, columns=col_name)
-print(annotations_df.head())
-
+# do some post processing. 
+# find the maximum gap
+gap_imp_gli = annotations_df["Glitch Start"] - annotations_df["Impact End"]
+gap_gli_fall = annotations_df["Fall Sart"] - annotations_df["Glitch End"]
+print(f'max gap between impact and glitch is {gap_imp_gli.max()}')
+print(f'max gap between glitch and fall is {gap_gli_fall.max()}')
+# set the glitch start = impact end + 1
+annotations_df["Glitch Start"] = annotations_df["Impact End"] + 1
+# set the fall start = glitch end + 1
+annotations_df["Fall Sart"] = annotations_df["Glitch End"] + 1
+gap_imp_gli = annotations_df["Glitch Start"] - annotations_df["Impact End"]
+gap_gli_fall = annotations_df["Fall Sart"] - annotations_df["Glitch End"]
 # append phase information to the csv
 # read all preprocessed data
 preprocessed_data = sorted([f for f in (output_dir/"preprocessed_data").glob('Trial_*.csv')])
@@ -68,6 +70,5 @@ for anno in annotations:
     # fall phase   
     phase_col[anno[5]:anno[6]+1] = "fall"
     data["phase"] = phase_col
-    print(data.head())
     # save the new csv file
     data.to_csv(output_dir/f"Trial_{anno[0]}.csv", index=False)

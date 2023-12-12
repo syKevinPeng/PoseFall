@@ -96,7 +96,11 @@ class Encoder(nn.Module):
             label: Tensor, shape ``[batch_size, num_classes]``
             mask: Tensor, shape ``[batch_size, seq_len, feature_dim]``
         """
-        data, label, mask = batch[f"{self.phase_names}_data"], batch[f"{self.phase_names}_label"], batch[f"{self.phase_names}_mask"]
+        data, label, mask = (
+            batch[f"{self.phase_names}_combined_poses"],
+            batch[f"{self.phase_names}_label"],
+            batch[f"{self.phase_names }_src_key_padding_mask"],
+        )
         batch_size = data.size(0)
         # human poses embedding
         x = self.skelEmbedding(data)
@@ -113,9 +117,8 @@ class Encoder(nn.Module):
         # create a bigger mask to attend to mu and sigma
         extra_mask = torch.zeros((batch_size, 2)).to(mask.device)
         mask_seq = torch.cat((extra_mask, mask), dim=1)
-
         encoder_output = self.trans_encoder(
-            encoded_xseq, src_key_padding_mask=mask_seq.bool()
+            encoded_xseq, src_key_padding_mask=mask_seq
         )
         # get the first two output
         mu = encoder_output[:, 0, :]
@@ -175,7 +178,7 @@ class Decoder(nn.Module):
         z, y, mask, lengths = (
             batch[f"{self.phase_names}_z"],
             batch[f"{self.phase_names}_label"],
-            batch[f"{self.phase_names}_mask"],
+            batch[f"{self.phase_names}_src_key_padding_mask"],
             batch[f"{self.phase_names}_lengths"],
         )
         latent_dim = z.size(1)
@@ -190,7 +193,6 @@ class Decoder(nn.Module):
         )
         # sequence encoding
         timequeries = self.pos_encoder(timequeries)
-
         # decode
         decoder_output = self.trans_decoder(
             tgt=timequeries, memory=shifted_z, tgt_key_padding_mask=mask.bool()

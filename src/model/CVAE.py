@@ -45,25 +45,25 @@ class CAVE(nn.Module):
         return mu + eps * sigma  # eps.mul(std).add_(mu)
 
     def prepare_batch(self, batch):
-        prepared_batch = {}
         for phase in self.phase_names:
-            prepared_batch[phase] = {
-                f"{phase}_data": batch[f"{phase}_combined_poses"].to(self.device),
-                f"{phase}_label": batch[f"{phase}_label"].to(self.device),
-                f"{phase}_mask": batch[f"{phase}_src_key_padding_mask"].to(self.device),
-                f"{phase}_length": batch[f"{phase}_lengths"].to(self.device),
-            }
-        return prepared_batch
+            batch[f"{phase}_combined_poses"] = batch[f"{phase}_combined_poses"].to(self.device)
+            batch[f"{phase}_label"] = batch[f"{phase}_label"].to(self.device)
+            batch[f"{phase}_src_key_padding_mask"] = batch[f"{phase}_src_key_padding_mask"].to(self.device)
+            batch[f"{phase}_lengths"] = batch[f"{phase}_lengths"].to(self.device)
+        return batch
 
     def forward(self, batch):
-        prepared_batch = self.prepare_batch(batch)
+        batch = self.prepare_batch(batch)
         for phase in self.phase_names:
             # Encoder
-            batch.update(getattr(self, f"{phase}_encoder")(prepared_batch[phase]))
+            encoder_output = getattr(self, f"{phase}_encoder")(batch)
+            batch.update(encoder_output)
+        for phase in self.phase_names:
             # reparameterize
-            batch[f"f{phase}_z"] = self.reparameterize(prepared_batch[phase], phase_name = phase)
+            batch[f"{phase}_z"] = self.reparameterize(batch, phase_name=phase)
+        for phase in self.phase_names:
             # Decoder
-            batch.update(getattr(self, f"{phase}_decoder")(prepared_batch[phase]))
+            batch.update(getattr(self, f"{phase}_decoder")(batch))
         return batch
 
     # def return_latent(self, batch):
@@ -73,10 +73,10 @@ class CAVE(nn.Module):
     #     batch[f"z"] = self.reparameterize(batch)
     #     return batch["z"]
 
-    def compute_loss(self, batch):
-        pred_batch = batch["output"]
-        input_batch = torch.clone(batch["data"])
-        mask_batch = batch["mask"]
+    def compute_loss(self, batch, phase_name):
+        pred_batch = torch.clone(batch[f"{phase_name}_output"])
+        input_batch = torch.clone(batch[f"{phase_name}_combined_poses"])
+        mask_batch = batch[f"{phase_name}_src_key_padding_mask"]
 
         padding = mask_batch.bool().unsqueeze(-1).expand(-1, -1, pred_batch.size(-1))
         input_batch[padding] = 0
@@ -86,7 +86,7 @@ class CAVE(nn.Module):
         human_model_loss = human_param_loss(pred_batch, input_batch)
 
         # KL divergence loss
-        mu, logvar = batch["mu"], batch["sigma"]
+        mu, logvar = batch[f"{phase_name}_mu"], batch[f"{phase_name}_sigma"]
         kl_loss = kl_divergence(mu, logvar)
 
         # vertex loss
@@ -98,10 +98,20 @@ class CAVE(nn.Module):
             "vertex_loss": 1,
         }
         # compute loss
-        total_loss = (
+        total_phase_loss = (
             loss_weight["human_model_loss"] * human_model_loss
             + loss_weight["kl_loss"] * kl_loss
             + loss_weight["vertex_loss"] * vertex_locs_loss
         )
+        # log corresponding loss
+        # print(
+        #     f"{phase_name} human model loss: {human_model_loss.item()}, kl loss: {kl_loss.item()}, vertex loss: {vertex_locs_loss.item()}"
+        # )
 
+        return total_phase_loss
+    
+    def compute_all_phase_loss(self, batch):
+        total_loss = 0
+        for phase in self.phase_names:
+            total_loss += self.compute_loss(batch, phase)
         return total_loss
