@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from .loss import *
 from icecream import ic
 from model.model import Encoder, Decoder
-
+import wandb
 
 class CAVE(nn.Module):
     def __init__(self, phase_names, num_classes_dict, device = "cuda") -> None:
@@ -119,11 +119,6 @@ class CAVE(nn.Module):
             + loss_weight["kl_loss"] * kl_loss
             + loss_weight["vertex_loss"] * vertex_locs_loss
         )
-        # log corresponding loss
-        # print(
-        #     f"{phase_name} human model loss: {human_model_loss.item()}, kl loss: {kl_loss.item()}, vertex loss: {vertex_locs_loss.item()}"
-        # )
-
         return total_phase_loss
     
     def compute_inter_phase_loss(self, batch):
