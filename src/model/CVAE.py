@@ -73,7 +73,7 @@ class CAVE(nn.Module):
         for i, phase in enumerate(self.phase_names):
             batch[f"{phase}_mu"] = fused_output[:, 2*i, :]
             batch[f"{phase}_sigma"] = fused_output[:, 2*i+1, :]
-            
+
         for phase in self.phase_names:
             # reparameterize
             batch[f"{phase}_z"] = self.reparameterize(batch, phase_name=phase)
@@ -90,13 +90,13 @@ class CAVE(nn.Module):
     #     return batch["z"]
 
     def compute_loss(self, batch, phase_name):
-        pred_batch = torch.clone(batch[f"{phase_name}_output"])
-        input_batch = torch.clone(batch[f"{phase_name}_combined_poses"])
+        pred_batch = batch[f"{phase_name}_output"]
+        input_batch = batch[f"{phase_name}_combined_poses"]
         mask_batch = batch[f"{phase_name}_src_key_padding_mask"]
 
-        padding = mask_batch.bool().unsqueeze(-1).expand(-1, -1, pred_batch.size(-1))
-        input_batch[padding] = 0
-        pred_batch[padding] = 0
+        padding = ~(mask_batch.bool().unsqueeze(-1).expand(-1, -1, pred_batch.size(-1)))
+        pred_batch = pred_batch * padding
+        input_batch = input_batch * padding
 
         # human model param l2 loss
         human_model_loss = human_param_loss(pred_batch, input_batch)
@@ -126,8 +126,42 @@ class CAVE(nn.Module):
 
         return total_phase_loss
     
+    def compute_inter_phase_loss(self, batch):
+        """
+        take 10% of the end of the first phase and 10% of the beginning of the second phase
+        compute the first derivative of the joint location        
+        """
+        inter_phase_loss = 0
+        for i in range(len(self.phase_names)-1):
+            first_phase = self.phase_names[i]
+            second_phase = self.phase_names[i+1]
+            pred_first_phase = batch[f"{first_phase}_output"]
+            pred_second_phase = batch[f"{second_phase}_output"]
+            # take the last 10% of the first phase
+            first_phase_last_10 = int(pred_first_phase.size(1) * 0.1)
+            # take the first 10% of the second phase
+            second_phase_first_10 = int(pred_second_phase.size(1) * 0.1)
+            # concatenate the two phase
+            combined_pred = torch.cat((pred_first_phase[:, -first_phase_last_10:, :], pred_second_phase[:, :second_phase_first_10, :]), dim=1)
+            # get the joint locations using SMPL model
+            smpl_model = SMPLModel().eval().to(DEVICE)
+            # get the vertex locations
+            _, joint_locs = smpl_model(combined_pred)
+            # take the first 24 joints (there are only 24 joints for SMPL model but they author make it more to fit for other models)
+            joint_locs = joint_locs[:, :, :24, :]
+            # calculate the first derivative of the joint locations
+            joint_locs_diff = joint_locs[:, 1:, :, :] - joint_locs[:, :-1, :, :]
+            # calculate the variance across the time
+            joint_locs_diff_var = torch.var(joint_locs_diff, dim=1)
+            # calculate the mean of the variance
+            inter_phase_loss += torch.mean(joint_locs_diff_var)
+        return inter_phase_loss
+
+
     def compute_all_phase_loss(self, batch):
         total_loss = 0
         for phase in self.phase_names:
             total_loss += self.compute_loss(batch, phase)
+        interphase_loss = self.compute_inter_phase_loss(batch)
+        total_loss += interphase_loss
         return total_loss

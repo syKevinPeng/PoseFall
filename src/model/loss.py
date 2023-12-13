@@ -34,8 +34,10 @@ class SMPLModel(nn.Module):
         body_pose = bone_rot.reshape(-1, 24, 3, 3)[:, 1:, :, :]
         SMPL_output = self.human_model(body_pose = body_pose, return_verts=True)
         verts = SMPL_output.vertices
+        joint_locs = SMPL_output.joints
         verts = verts.reshape(batch_size, -1, verts.size(-2), verts.size(-1))
-        return verts
+        joint_locs = joint_locs.reshape(batch_size, -1, joint_locs.size(-2), joint_locs.size(-1))
+        return verts, joint_locs
 
 def human_param_loss(pred_batch, input_batch):
     """
@@ -57,8 +59,8 @@ def vertex_loss(pred_batch, input_batch):
     # initialize SMPL model
     smpl_model = SMPLModel().eval().to(DEVICE)
     # get the vertex locations
-    pred_vertex_locs = smpl_model(pred_batch)
-    gt_vertex_locs = smpl_model(input_batch)
+    pred_vertex_locs, _ = smpl_model(pred_batch)
+    gt_vertex_locs,_ = smpl_model(input_batch)
     # compute the vertex loss
     vertex_locs = F.mse_loss(pred_vertex_locs, gt_vertex_locs, reduction="mean")
     return vertex_locs
