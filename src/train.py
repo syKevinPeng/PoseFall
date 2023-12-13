@@ -3,12 +3,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from dataloader import FallingData
-from model.model import Encoder, Decoder
 from model.CVAE import CAVE
 from icecream import ic
 import wandb
 from pathlib import Path
 import datetime
+from tqdm import tqdm
+
 # Set device
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -21,7 +22,7 @@ parser.add_argument(
     help="path to the data directory",
 )
 parser.add_argument("--lr", type=float, default=1e-5, help="learning rate")
-parser.add_argument("--batch_size", type=int, default=0, help="batch size")
+parser.add_argument("--batch_size", type=int, default=16, help="batch size")
 parser.add_argument(
     "--num_workers", type=int, default=4, help="number of workers for data loading"
 )
@@ -29,7 +30,7 @@ parser.add_argument("--epochs", type=int, default=1000)
 parser.add_argument(
     "--wandb_project", type=str, default="posefall", help="wandb project name"
 )
-parser.add_argument("--wandb_mode", type=str, default="offline", help="wandb mode")
+parser.add_argument("--wandb_mode", type=str, default="disabled", help="wandb mode")
 parser.add_argument("--wandb_tag", type=str, default="", help="wandb tag")
 parser.add_argument(
     "--wandb_exp_name", type=str, default="test", help="wandb experiment name"
@@ -51,7 +52,7 @@ wandb.init(
     tags=args.wandb_tag,
     name=args.wandb_exp_name,
     notes=args.wandb_exp_description,
-)  # Added experiment description
+)
 
 # ======================== prepare files/folders ========================
 # check if ckpt path exists
@@ -70,7 +71,7 @@ ckpt_path = ckpt_path / f"{current_time}_{args.wandb_exp_name}"
 PHASES = ["impa", "glit", "fall"]
 data = FallingData(args.data_path)
 dataloaders = torch.utils.data.DataLoader(
-    data, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers
+    data, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
 )
 
 # Get number of classes for each phase
@@ -90,7 +91,8 @@ optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 for epoch in range(args.epochs):  # Epoch loop
     epoch_loss = 0
-    for i_batch, (data_dict) in enumerate(dataloaders):
+    print(f"=== training on epoch {epoch} ===")
+    for i_batch, (data_dict) in tqdm(enumerate(dataloaders), total=len(dataloaders)):
         optimizer.zero_grad()
         batch = model(batch=data_dict)
         loss = model.compute_all_phase_loss(batch)
@@ -98,8 +100,8 @@ for epoch in range(args.epochs):  # Epoch loop
         optimizer.step()
         epoch_loss += loss.item()
     wandb.log({"epoch_loss": epoch_loss})
-
+    print(f"Epoch {epoch}: loss {epoch_loss}")
     # Save model checkpoint
     if (epoch + 1) % 10 == 0:  # Save every 10 epochs
-        checkpoint_path = ckpt_path / f"epoch_{epoch}.pt"
+        checkpoint_path = ckpt_path / f"epoch_{epoch}.p5"
         torch.save(model.state_dict(), checkpoint_path)

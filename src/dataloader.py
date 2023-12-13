@@ -46,7 +46,7 @@ class FallingData(Dataset):
         data = pd.read_csv(path, header=0)
 
         data_dict ={
-            "frame": torch.tensor(data["frame"].values),
+            "frame_num": torch.tensor(max(data["frame"].values)),
             "impa_label": torch.tensor(self.impact_label[self.impact_label["Trial Number"] == trial_number].iloc[:,1:].values, dtype=torch.float).flatten(),
             "glit_label": torch.tensor(self.glitch_label[self.glitch_label["Trial Number"] == trial_number].iloc[:,1:].values, dtype=torch.float).flatten(),
             "fall_label": torch.tensor(self.fall_label[self.fall_label["Trial Number"] == trial_number].iloc[:,1:].values, dtype=torch.float).flatten(),
@@ -119,6 +119,19 @@ class FallingData(Dataset):
 
 
         return data_dict
+    
+    # def collate_fn(self, data):
+    #     """
+    #     collate_fn for the dataloader
+    #     """
+    #     data1, data2 = data[0], data[1]
+
+    #     for key1, key2 in zip(data1.keys(), data2.keys()):
+    #         if data1[key1].size() != data2[key2].size():
+    #             print(f'key1: {key1}:{data1[key1]}, key2: {key2}::{data2[key2]}')
+    #     exit()
+    #     return
+
 
 
 # test dataset works
