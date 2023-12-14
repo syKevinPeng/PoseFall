@@ -35,7 +35,7 @@ PHASES = ["impa", "glit", "fall"]
 data = FallingData(data_path)
 dataloaders = torch.utils.data.DataLoader(
     data,
-    batch_size=4,
+    batch_size=1,
     shuffle=True,
     num_workers=0,
 )
@@ -61,16 +61,21 @@ for data_dict in tqdm(dataloaders):
             "impa_label": data_dict["impa_label"].to(DEVICE),
             "glit_label": data_dict["glit_label"].to(DEVICE),
             "fall_label": data_dict["fall_label"].to(DEVICE),
-            "impa_length": data_dict["impa_lengths"].to(DEVICE),
-            "glit_length": data_dict["glit_lengths"].to(DEVICE),
-            "fall_length": data_dict["fall_lengths"].to(DEVICE),
-
+            "impa_mask": data_dict["impa_src_key_padding_mask"].to(DEVICE),
+            "glit_mask": data_dict["glit_src_key_padding_mask"].to(DEVICE),
+            "fall_mask": data_dict["fall_src_key_padding_mask"].to(DEVICE),
     }
     genreated_batch = model.generate(input_batch)
+    batch_size = input_batch["impa_label"].size(0)
     whole_sequences = []
     for phase in PHASES:
         model_output = genreated_batch[f"{phase}_output"]
         model_output = model_output.cpu().detach().numpy()
+        # remove padding based on the mask
+        mask = input_batch[f"{phase}_mask"]
+        mask = mask.cpu().detach().numpy().astype(bool)
+        # remove the padding but keep the batch dimension
+        model_output = model_output[mask, :].reshape(batch_size, -1, model_output.shape[-1])
         whole_sequences.append(model_output)
     whole_sequences = np.concatenate(whole_sequences, axis=1)
     ic(whole_sequences.shape)

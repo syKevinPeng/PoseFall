@@ -41,6 +41,9 @@ parser.add_argument(
 parser.add_argument(
     "--ckpt_path", type=str, default="", help="path to save checkpoints"
 )
+parser.add_argument(
+    "--model_save_freq", type=int, default=10, help="frequency to save model"
+)
 args = parser.parse_args()
 
 # ======================== prepare wandb ========================
@@ -62,8 +65,10 @@ else:
     ckpt_path = Path(args.ckpt_path)
     if not ckpt_path.exists():
         ckpt_path.mkdir(parents=True, exist_ok=True)
+        print(f"Created checkpoint path {ckpt_path}")
 current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 ckpt_path = ckpt_path / f"{current_time}_{args.wandb_exp_name}"
+ckpt_path.mkdir(parents=True, exist_ok=True)
 
 # ======================== define variables for training ========================
 # TODO: create a config file for all the variables
@@ -71,7 +76,10 @@ ckpt_path = ckpt_path / f"{current_time}_{args.wandb_exp_name}"
 PHASES = ["impa", "glit", "fall"]
 data = FallingData(args.data_path)
 dataloaders = torch.utils.data.DataLoader(
-    data, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+    data,
+    batch_size=args.batch_size,
+    shuffle=True,
+    num_workers=args.num_workers,
 )
 
 # Get number of classes for each phase
@@ -102,6 +110,6 @@ for epoch in range(args.epochs):  # Epoch loop
     wandb.log({"epoch_loss": epoch_loss})
     print(f"Epoch {epoch}: loss {epoch_loss}")
     # Save model checkpoint
-    if (epoch + 1) % 10 == 0:  # Save every 10 epochs
+    if (epoch + 1) % args.model_save_freq == 0:  # Save every 10 epochs
         checkpoint_path = ckpt_path / f"epoch_{epoch}.p5"
         torch.save(model.state_dict(), checkpoint_path)
