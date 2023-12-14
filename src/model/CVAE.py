@@ -12,22 +12,23 @@ from model.model import Encoder, Decoder
 import wandb
 
 class CAVE(nn.Module):
-    def __init__(self, phase_names, num_classes_dict, device = "cuda") -> None:
+    def __init__(self, phase_names, num_classes_dict, latent_dim = 256, device = "cuda") -> None:
         super().__init__()
         self.phase_names = phase_names
         self.num_classes_dict = num_classes_dict
         self.device = device
+        self.latent_dim =latent_dim
         # initialize encoder and decoder for each phase
         for phase in self.phase_names:
             setattr(
                 self,
                 f"{phase}_encoder",
-                Encoder(num_classes=num_classes_dict[phase], phase_names=phase),
+                Encoder(num_classes=num_classes_dict[phase], phase_names=phase, latent_dim=self.latent_dim),
             )
             setattr(
                 self,
                 f"{phase}_decoder",
-                Decoder(num_classes=num_classes_dict[phase], phase_names=phase),
+                Decoder(num_classes=num_classes_dict[phase], phase_names=phase, latent_dim=self.latent_dim),
             )
 
         print(f"CAVE model initialized with phases: {self.phase_names}")
@@ -76,7 +77,7 @@ class CAVE(nn.Module):
 
         for phase in self.phase_names:
             # reparameterize
-            batch[f"{phase}_z"] = self.reparameterize(batch, phase_name=phase)
+            batch[f"{phase}_z"] = self.reparameterize(batch, phase_name=phase) # shape(batch_size, latent_dim)
         for phase in self.phase_names:
             # Decoder
             batch.update(getattr(self, f"{phase}_decoder")(batch))
@@ -160,3 +161,30 @@ class CAVE(nn.Module):
         interphase_loss = self.compute_inter_phase_loss(batch)
         total_loss += interphase_loss
         return total_loss
+    
+    def generate(self, input_batch):
+        """
+        generate a sequence of poses given the input
+        @param input_batch: a dictionary of input batch, it should contains the following keys: impa_label, glit_label, fall_label, impa_length, glit_length, fall_length
+        """
+        impa_label = input_batch["impa_label"]
+        glit_label = input_batch["glit_label"]
+        fall_label = input_batch["fall_label"]
+        impa_mask  = input_batch["impa_mask"]
+        glit_mask  = input_batch["glit_mask"]
+        fall_mask  = input_batch["fall_mask"]
+
+        batch_size = impa_label.size(0)
+
+        model_input_batch = {}
+        for phase in self.phase_names:
+            # sample noise
+            z = torch.randn(batch_size, self.latent_dim).to(self.device)
+            model_input_batch[f"{phase}_z"] = z
+            model_input_batch[f"{phase}_label"] = input_batch[f"{phase}_label"]
+            model_input_batch[f"{phase}_src_key_padding_mask"] = input_batch[f"{phase}_mask"]
+        
+        for phase in self.phase_names: 
+            # Decoder
+            model_input_batch.update(getattr(self, f"{phase}_decoder")(model_input_batch))
+        return model_input_batch

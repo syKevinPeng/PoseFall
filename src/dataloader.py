@@ -106,7 +106,7 @@ class FallingData(Dataset):
             )  # shape(num_frames, 24,6) => shape(num_frames, 144)
 
             data_dict[f"{phase}_src_key_padding_mask"] = src_key_padding_mask # shape(num_frames,)
-            data_dict[f"{phase}_lengths"] = torch.tensor(frame_length) 
+            data_dict[f"{phase}_lengths"] = torch.tensor(frame_length)  # Note: this the length of the actual sequence, not the padded one.
             combined_pose = torch.cat(
                 (
                     data_dict[f"{phase}_armature_location"],

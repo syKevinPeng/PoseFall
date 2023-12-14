@@ -181,11 +181,10 @@ class Decoder(nn.Module):
         self.final_layer = nn.Linear(self.latent_dim, self.input_feats)
 
     def forward(self, batch):
-        z, y, mask, lengths = (
+        z, y, mask = (
             batch[f"{self.phase_names}_z"],
             batch[f"{self.phase_names}_label"],
             batch[f"{self.phase_names}_src_key_padding_mask"],
-            batch[f"{self.phase_names}_lengths"],
         )
         latent_dim = z.size(1)
         batch_size, num_frames = mask.shape

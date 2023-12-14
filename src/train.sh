@@ -4,4 +4,4 @@ python train.py \
 --wandb_exp_description "first training- no data aug, only on data recorded in the first session" \
 --wandb_mode disabled \
 --epochs 2000 \
---batch_size 16
+--batch_size 1

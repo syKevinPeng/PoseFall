@@ -11,7 +11,7 @@ import sys
 from tqdm import tqdm
 
 sys.path.append("../utils")
-from joint_names import MOCAP_JOINT_NAMES, SMPL_JOINT_NAMES
+from data_processing.joint_names import MOCAP_JOINT_NAMES, SMPL_JOINT_NAMES
 import smplx
 import pickle
 
@@ -123,7 +123,7 @@ def get_mesh_renderer(image_size=512, lights=None, device=None):
     )
     return renderer
 # Function to create grid lines
-def create_ground_plane(size=2, center=(0, 0, 0), color=[0, 0, 1]):
+def create_ground_plane(size=2, center=(0, 0, 0), color=[0, 0, -2]):
     """
     Create a square ground plane.
     size: Length of the square side
@@ -134,10 +134,10 @@ def create_ground_plane(size=2, center=(0, 0, 0), color=[0, 0, 1]):
     cx, cy, cz = center
     # Four corners of the square
     verts = torch.tensor([
-        [cx - half_size, cy, cz - half_size],
-        [cx - half_size, cy, cz + half_size],
-        [cx + half_size, cy, cz + half_size],
-        [cx + half_size, cy, cz - half_size]
+        [cx - half_size, cy - half_size, cz],
+        [cx - half_size, cy + half_size, cz],
+        [cx + half_size, cy + half_size, cz],
+        [cx + half_size, cy - half_size, cz]
     ], dtype=torch.float32)
     # Two triangles to form the square
     faces = torch.tensor([
@@ -151,56 +151,58 @@ def create_ground_plane(size=2, center=(0, 0, 0), color=[0, 0, 1]):
     return ground_mesh
 
 # %%
-# render an image
-lights = pytorch3d.renderer.PointLights(location=[[0, 0, 3]], device=device)
-renderer = get_mesh_renderer(image_size=512, lights=lights, device=device)
-# create the grid
-ground_plane = create_ground_plane().to(device)
 
-# loop through all the frames
-R, T = look_at_view_transform(dist=8.0, elev=-90, azim=0)
-cameras = pytorch3d.renderer.FoVPerspectiveCameras(R=R, T=T, device=device, fov=60).to(
-    device
-)
+def visulize_poses(dataframe):
+    print(f'visulizing {dataframe.shape[0]} frames')
+    # render an image
+    lights = pytorch3d.renderer.PointLights(location=[[0, 0, 5]], device=device)
+    renderer = get_mesh_renderer(image_size=512, lights=lights, device=device)
+    # create the grid
+    # ground_plane = create_ground_plane().to(device)
 
-rends = []
-data = load_data()
-human_model, _ = init_human_model()
-max_frame = len(data)
-max_frame = 20
-for frame_num in tqdm(range(0, max_frame)):
-    params = get_motion_param(frame_num, df=data)
-    vertices, joints = update_model(human_model, params)
-    vertices = torch.tensor(vertices).to(device)
-    vertices = vertices.unsqueeze(0)
-    faces = human_model.faces.astype(np.int64)
-    textures = torch.ones_like(vertices)
-    color = torch.tensor([0.7, 0.7, 1]).to(device)
-    textures = textures * color
-    textures = pytorch3d.renderer.TexturesVertex(textures).to(device)
-
-    faces = torch.tensor(faces).to(device)
-    faces = faces.unsqueeze(0)
-
-    rendered_mesh = pytorch3d.structures.Meshes(
-        verts=vertices, faces=faces, textures=textures
+    # loop through all the frames
+    R, T = look_at_view_transform(dist=5, elev=-60, azim=0)
+    cameras = pytorch3d.renderer.FoVPerspectiveCameras(R=R, T=T, device=device, fov=60).to(
+        device
     )
-    rendered_mesh = rendered_mesh.to(device)
-    combined_verts = torch.cat([rendered_mesh.verts_list()[0], ground_plane.verts_list()[0]], dim=0)
-    combined_faces = torch.cat([rendered_mesh.faces_list()[0], ground_plane.faces_list()[0] + rendered_mesh.verts_list()[0].shape[0]], dim=0)
-    combined_textures = TexturesVertex(verts_features=torch.cat([rendered_mesh.textures.verts_features_list()[0], ground_plane.textures.verts_features_list()[0]], dim=0).unsqueeze(0))
 
-    combined_mesh = Meshes(verts=[combined_verts], faces=[combined_faces], textures=combined_textures).to(device)
+    rends = []
+    data = dataframe
+    human_model, _ = init_human_model()
+    max_frame = len(data)
+    for frame_num in tqdm(range(0, max_frame)):
+        params = get_motion_param(frame_num, df=data)
+        vertices, joints = update_model(human_model, params)
+        vertices = torch.tensor(vertices).to(device)
+        vertices = vertices.unsqueeze(0)
+        faces = human_model.faces.astype(np.int64)
+        textures = torch.ones_like(vertices)
+        color = torch.tensor([0.7, 0.7, 1]).to(device)
+        textures = textures * color
+        textures = pytorch3d.renderer.TexturesVertex(textures).to(device)
 
-    rend = renderer(combined_mesh, cameras=cameras, lights=lights)
-    rend = rend.cpu().numpy()[0, ..., :3]  # (B, H, W, 4) -> (H, W, 3)
-    # convert to uint8
-    rend = rend * 255
-    rend = rend.astype("uint8")
-    rends.append(rend)
+        faces = torch.tensor(faces).to(device)
+        faces = faces.unsqueeze(0)
+
+        rendered_mesh = pytorch3d.structures.Meshes(
+            verts=vertices, faces=faces, textures=textures
+        )
+        rendered_mesh = rendered_mesh.to(device)
+        # combined_verts = torch.cat([rendered_mesh.verts_list()[0], ground_plane.verts_list()[0]], dim=0)
+        # combined_faces = torch.cat([rendered_mesh.faces_list()[0], ground_plane.faces_list()[0] + rendered_mesh.verts_list()[0].shape[0]], dim=0)
+        # combined_textures = TexturesVertex(verts_features=torch.cat([rendered_mesh.textures.verts_features_list()[0], ground_plane.textures.verts_features_list()[0]], dim=0).unsqueeze(0))
+
+        # combined_mesh = Meshes(verts=[combined_verts], faces=[combined_faces], textures=combined_textures).to(device)
+        combined_mesh = rendered_mesh
+        rend = renderer(combined_mesh, cameras=cameras, lights=lights)
+        rend = rend.cpu().numpy()[0, ..., :3]  # (B, H, W, 4) -> (H, W, 3)
+        # convert to uint8
+        rend = rend * 255
+        rend = rend.astype("uint8")
+        rends.append(rend)
 
 
-imageio.mimsave(VIZ_OUTPUT / "example.gif", rends, fps=24, loop=0)
+    imageio.mimsave(VIZ_OUTPUT / "example.gif", rends, fps=20, loop=0)
 
 # %%
 # create a 360 view

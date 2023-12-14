@@ -5,7 +5,10 @@ from pathlib import Path
 from dataloader import FallingData
 from model.CVAE import CAVE
 from icecream import ic
-from data_processing.utils import parse_output
+import pandas as pd
+from data_processing.utils import parse_output, rotation_6d_to_matrix, matrix_to_euler_angles
+from data_processing import joint_names
+from visulization.pose_vis import visulize_poses
 # Set device
 
 # ======================== prepare ckpt ========================
@@ -70,13 +73,31 @@ for data_dict in tqdm(dataloaders):
     whole_sequences = []
     for phase in PHASES:
         model_output = genreated_batch[f"{phase}_output"]
-        model_output = model_output.cpu().detach().numpy()
+        model_output = model_output.cpu().detach()
         # remove padding based on the mask
         mask = input_batch[f"{phase}_mask"]
-        mask = mask.cpu().detach().numpy().astype(bool)
+        mask = mask.cpu().detach().bool()
         # remove the padding but keep the batch dimension
         model_output = model_output[mask, :].reshape(batch_size, -1, model_output.shape[-1])
         whole_sequences.append(model_output)
-    whole_sequences = np.concatenate(whole_sequences, axis=1)
-    ic(whole_sequences.shape)
+    whole_sequences = torch.concat(whole_sequences, axis=1)
+    # parse the output
+    parsed_seequnces = parse_output(whole_sequences)
+    # convert the rotation to rotation matrix
+    bone_rot = rotation_6d_to_matrix(parsed_seequnces["bone_rot"])
+    # convert the rotation matrix to euler angle
+    bone_rot = matrix_to_euler_angles(bone_rot, "XYZ")
+    bone_rot = bone_rot.reshape(batch_size, bone_rot.size(1), -1)
+    arm_rot = rotation_6d_to_matrix(parsed_seequnces["arm_rot"])
+    arm_rot = matrix_to_euler_angles(arm_rot, "XYZ")
+    arm_loc = parsed_seequnces["arm_loc"]
+    # form the output as a dataframe
+    joint_name = joint_names.SMPL_JOINT_NAMES
+    joint_name = np.array([[f"{name}_x", f"{name}_y", f"{name}_z"] for name in joint_name]).flatten()
+    # get the first item in the batch
+    data = torch.concatenate([arm_loc, arm_rot, bone_rot], axis=2)[0]
+    df = pd.DataFrame(data=data, 
+                      columns=["arm_loc_x", "arm_loc_y", "arm_loc_z"] + ["arm_rot_x", "arm_rot_y", "arm_rot_z"] + list(joint_name))
+    # visulization
+    visulize_poses(df)
     break
