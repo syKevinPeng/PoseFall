@@ -14,16 +14,13 @@ from visulization.pose_vis import visulize_poses
 # ======================== prepare ckpt ========================
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # checkpoint path
-ckpt_path = "/home/siyuan/research/PoseFall/src/wandb/run-20231214_025139-ijy4tddr/files/2023-12-14_02-51-40_exp0"
+ckpt_path = "/home/siyuan/research/PoseFall/src/wandb/latest-run/files/2023-12-14_02-51-40_exp0/epoch_1999.p5 "
 ckpt_path = Path(ckpt_path)
 if not ckpt_path.exists():
     raise ValueError(f"Checkpoint path {ckpt_path} does not exist")
-# get all file under the ckpt path and sort them, get the latest one
-ckpt_list = list(ckpt_path.glob("*.p5"))
-ckpt_list.sort()
-ckpt_file_path = ckpt_list[-1]
+
 # load checkpoint
-state_dict = torch.load(ckpt_file_path, map_location=DEVICE)
+state_dict = torch.load(ckpt_path, map_location=DEVICE)
 
 # ======================== prepare data ========================
 data_path = "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
