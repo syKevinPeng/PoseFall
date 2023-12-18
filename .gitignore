@@ -1,4 +1,5 @@
 # Ignore everything in data folder
+.vscode/*
 data/*
 wandb/*
 src/visulization/viz_output/*
