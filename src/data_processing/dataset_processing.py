@@ -23,7 +23,7 @@ if not os.path.exists(output_dir):
 mocap_fbx_list = [os.path.join(dataset_dir, f) for f in os.listdir(dataset_dir) if f.endswith('.fbx')]
 mocap_fbx_list.sort()
 # need for for loop to loop through all the mocap data, but for now, just use one
-mocap_fbx_list = mocap_fbx_list[23:]
+mocap_fbx_list = mocap_fbx_list[49:]
 for mocap_fbx_path in mocap_fbx_list:
     # use regex to match the trial number and actor name
     trial_num = re.search(r'Trial_(\d+)', mocap_fbx_path).group(1)
@@ -45,7 +45,14 @@ for mocap_fbx_path in mocap_fbx_list:
     try:
         mocap_armature = bpy.context.scene.objects[f'{actor_name}:Hips']
     except:
-        actor_name = 'Kate'
+        # find the armature that ends with Hips
+        for obj in bpy.context.scene.objects:
+            if obj.type == 'ARMATURE' and obj.name.endswith('Hips'):
+                mocap_armature_name = obj.name
+                print(f'successfully found {mocap_armature_name}')
+                break
+
+        actor_name = mocap_armature_name.split(':')[0]
         mocap_armature = bpy.context.scene.objects[f'{actor_name}:Hips']
         curr_mocap_joint_name = [ f'{actor_name}:{name}' for name in MOCAP_JOINT_NAMES]
     # setup up Smplex

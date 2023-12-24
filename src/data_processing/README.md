@@ -18,4 +18,5 @@ ouput data will be stored at ../../data/MoCap/Mocap_processed_data/label.csv
 
 - To add Temporal segmentation to processed csv files
 ```python
+python temporal_segmentation.py
 ```

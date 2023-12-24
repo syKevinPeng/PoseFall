@@ -13,7 +13,6 @@ if not label_path.exists():
 # %%
 # read from csv
 df = pd.read_csv(label_path)
-print(df.columns)
 # convert categorical labels to one-hot labels
 label_dummies = pd.get_dummies(df[['Impact Location', 'Impact Attribute', 'Impact Force',
        'Glitch Attribute', 'Glitch Speed', 'Fall Attribute', 'End Postion']]).astype('int')

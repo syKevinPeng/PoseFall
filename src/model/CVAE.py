@@ -3,13 +3,14 @@ This file contains CVAE model. Refer to model.py for the encoder and decoder
 """
 from ast import parse
 from turtle import forward
+from scipy import interpolate
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .loss import *
 from icecream import ic
 from model.model import Encoder, Decoder
-import wandb
+import wandb, scipy
 
 class CAVE(nn.Module):
     def __init__(self, phase_names, num_classes_dict, latent_dim = 256, device = "cuda") -> None:
@@ -111,7 +112,7 @@ class CAVE(nn.Module):
         # loss weight
         loss_weight = {
             "human_model_loss": 1,
-            "kl_loss": 1e-5,
+            "kl_loss": 1e-4,
             "vertex_loss": 1,
         }
         # compute loss
@@ -151,12 +152,23 @@ class CAVE(nn.Module):
             joint_locs_diff_var = torch.var(joint_locs_diff, dim=1)
             # calculate the mean of the variance
             inter_phase_loss += torch.mean(joint_locs_diff_var)
+
+            # Spline loss: calculate the different between the actual location and the interpolated location
+            interpolated_joint_locs = scipy.interpolate.CubicSpline(
+                x=torch.linspace(0, 1, joint_locs.size(1)), y=joint_locs.cpu().detach().numpy(), axis=1
+            )(torch.linspace(0, 1, joint_locs.size(1)))
+            interpolated_joint_locs = torch.tensor(interpolated_joint_locs).to(DEVICE)
+            
+            # calculate the l2 difference between the actual location and the spline location
+            spline_loss = torch.mean(torch.square(joint_locs - interpolated_joint_locs))
+            inter_phase_loss += spline_loss
+
         return inter_phase_loss
 
 
     def compute_all_phase_loss(self, batch):
         total_loss = 0
-        for phase in self.phase_names:
+        for phase in self.phase_names:   
             total_loss += self.compute_loss(batch, phase)
         interphase_loss = self.compute_inter_phase_loss(batch)
         total_loss += interphase_loss
