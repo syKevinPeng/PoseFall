@@ -31,7 +31,7 @@ parser.add_argument(
     "--wandb_project", type=str, default="posefall", help="wandb project name"
 )
 parser.add_argument("--wandb_mode", type=str, default="disabled", help="wandb mode")
-parser.add_argument("--wandb_tag", type=str, default="", help="wandb tag")
+parser.add_argument("--wandb_tag", type=str, default="train", help="wandb tag")
 parser.add_argument(
     "--wandb_exp_name", type=str, default="test", help="wandb experiment name"
 )
@@ -42,7 +42,7 @@ parser.add_argument(
     "--ckpt_path", type=str, default="", help="path to save checkpoints"
 )
 parser.add_argument(
-    "--model_save_freq", type=int, default=10, help="frequency to save model"
+    "--model_save_freq", type=int, default=200, help="frequency to save model"
 )
 args = parser.parse_args()
 
@@ -111,5 +111,5 @@ for epoch in range(args.epochs):  # Epoch loop
     print(f"Epoch {epoch}: loss {epoch_loss}")
     # Save model checkpoint
     if (epoch + 1) % args.model_save_freq == 0:  # Save every 10 epochs
-        checkpoint_path = ckpt_path / f"epoch_{epoch}.p5"
+        checkpoint_path = ckpt_path / f"epoch_{epoch}.pth"
         torch.save(model.state_dict(), checkpoint_path)

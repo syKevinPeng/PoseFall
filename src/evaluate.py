@@ -60,9 +60,21 @@ def prepare_data(data_path):
 if __name__ == "__main__":
     parser = argparse.get_parser()
     parser.add_argument("--ckpt_path", type=str, default="", help="Path to the checkpoint")
-    parser.add_argument("--data_path", type=str, default="", help="Path to the data")
+    parser.add_argument("--data_path", type=str, default="/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data", help="Path to the data")
     parser.add_argument("--output_path", type=str, default="", help="Path to the output")
     parser.add_argument("--num_to_gen", type=int, default=1, help="Number of sequences to generate")
+    parser.add_argument(
+    "--wandb_project", type=str, default="posefall", help="wandb project name"
+    )
+    parser.add_argument("--wandb_mode", type=str, default="disabled", help="wandb mode")
+    parser.add_argument("--wandb_tag", type=str, default="evaluate", help="wandb tag")
+    parser.add_argument(
+        "--wandb_exp_name", type=str, default="test", help="wandb experiment name"
+    )
+    parser.add_argument(
+        "--wandb_exp_description", type=str, default="", help="wandb experiment description"
+    )  # Added argument for experiment description
+
     args = parser.parse_args()
 
     state_dict = load_ckpts(args.ckpt_path)
