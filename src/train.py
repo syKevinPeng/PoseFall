@@ -7,7 +7,7 @@ from model.CVAE import CAVE
 from icecream import ic
 import wandb
 from pathlib import Path
-import datetime
+import datetime, re
 from tqdm import tqdm
 
 # Set device
@@ -96,6 +96,29 @@ num_class = {
 # Initialize model and optimizer
 model = CAVE(phase_names=PHASES, num_classes_dict=num_class).to(DEVICE)
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+
+# load pretrained model
+pretrained_weights = Path("/home/siyuan/research/PoseFall/src/model/pretrained_models/humanact12/checkpoint_5000.pth.tar")
+if not pretrained_weights.exists():
+    raise ValueError(f"Pretrained weights {pretrained_weights} does not exist")
+weight = torch.load(pretrained_weights)
+# only get the encoder weights
+encoder_weight = {}
+for key in weight.keys():
+    if "encoder" in key.split(".")[0]:
+        encoder_weight[key] = weight[key]
+duplicated_weight = {}
+for phase in PHASES:
+    # update weights key name
+    for key in encoder_weight.keys():
+        new_key = re.sub(r"(encoder)(?=\.)", f"{phase}_encoder", key, count=1)
+        duplicated_weight[new_key] = encoder_weight[key]
+# check if the keys are the same
+for key in duplicated_weight.keys():
+    if key not in model.state_dict().keys():
+        print(f"Key {key} not in model state dict")
+# load the state dict to the model
+model.load_state_dict(duplicated_weight, strict=False)
 
 for epoch in range(args.epochs):  # Epoch loop
     epoch_loss = 0

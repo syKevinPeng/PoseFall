@@ -112,7 +112,7 @@ class CAVE(nn.Module):
         # loss weight
         loss_weight = {
             "human_model_loss": 1,
-            "kl_loss": 1e-4,
+            "kl_loss": 1e-3,
             "vertex_loss": 1,
         }
         # compute loss

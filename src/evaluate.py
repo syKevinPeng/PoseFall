@@ -58,7 +58,7 @@ def prepare_data(data_path):
 
 
 if __name__ == "__main__":
-    parser = argparse.get_parser()
+    parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt_path", type=str, default="", help="Path to the checkpoint")
     parser.add_argument("--data_path", type=str, default="/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data", help="Path to the data")
     parser.add_argument("--output_path", type=str, default="", help="Path to the output")

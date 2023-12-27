@@ -84,11 +84,11 @@ class Encoder(nn.Module):
             batch_first=True,
         )
         # define the entire encoder
-        self.trans_encoder = nn.TransformerEncoder(
+        self.seqTransEncoder = nn.TransformerEncoder(
             trans_layer, num_layers=self.num_att_layers
         )
 
-        self.pos_encoder = PositionalEncoding(latent_dim)
+        self.sequence_pos_encoder  = PositionalEncoding(latent_dim)
 
         self.skelEmbedding = nn.Linear(self.input_feature_dim, self.latent_dim)
 
@@ -115,12 +115,12 @@ class Encoder(nn.Module):
         # add mu and sigma queries to the input
         xseq = torch.cat((muQuery, sigmaQuery, x), dim=1)
         # add positional encoding
-        encoded_xseq = self.pos_encoder(xseq)
+        encoded_xseq = self.sequence_pos_encoder (xseq)
 
         # create a bigger mask to attend to mu and sigma
         extra_mask = torch.zeros((batch_size, 2)).to(mask.device)
         mask_seq = torch.cat((extra_mask, mask), dim=1)
-        encoder_output = self.trans_encoder(
+        encoder_output = self.seqTransEncoder(
             encoded_xseq, src_key_padding_mask=mask_seq
         )
         # get the first two output
