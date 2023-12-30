@@ -5,4 +5,4 @@ tar xfzv pretrained_models.tgz
 echo -e "Cleaning\n"
 rm pretrained_models.tgz
 
-echo -e "Downloading done!"
+echo -e "Downloading done!" 

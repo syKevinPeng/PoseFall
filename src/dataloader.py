@@ -1,4 +1,5 @@
 import enum
+from sympy import false
 import torch
 from torch.utils.data import Dataset
 from pathlib import Path
@@ -12,7 +13,7 @@ glitch_phase_att = ["Glitch Attribute"] # full list: ["Glitch Speed", "Glitch At
 fall_phase_att = ["Fall Attribute","End Postion"]
 
 class FallingData(Dataset):
-    def __init__(self, data_path):
+    def __init__(self, data_path, data_aug = True):
         if not Path(data_path).exists():
             raise FileNotFoundError(f"{data_path} does not exist")
         # find all csv files in the directory using pathlib
@@ -34,6 +35,7 @@ class FallingData(Dataset):
         self.phase = ["impa", "glit", "fall"]
         # set the max frame length for each phase
         self.max_frame = {"impa": 120, "glit": 350, "fall": 400}
+        self.data_aug = data_aug
 
 
     def __len__(self):
@@ -44,23 +46,37 @@ class FallingData(Dataset):
         path = self.data_path[idx]
         trial_number = int(path.stem.split("_")[1])
         data = pd.read_csv(path, header=0)
-
         data_dict ={
             "frame_num": torch.tensor(max(data["frame"].values)),
             "impa_label": torch.tensor(self.impact_label[self.impact_label["Trial Number"] == trial_number].iloc[:,1:].values, dtype=torch.float).flatten(),
             "glit_label": torch.tensor(self.glitch_label[self.glitch_label["Trial Number"] == trial_number].iloc[:,1:].values, dtype=torch.float).flatten(),
             "fall_label": torch.tensor(self.fall_label[self.fall_label["Trial Number"] == trial_number].iloc[:,1:].values, dtype=torch.float).flatten(),
         }
+        # set the starting location of the armature to be the origin
+        data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]] = data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]] - data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]].iloc[0]
         # selec the data that contains action phase information
         for phase in self.phase:
             phase_data = data[data["phase"] == phase]
             # frame length
             frame_length = len(phase_data)
+            # apply fft transformation
+            if self.data_aug:
+                # apply fft transformation
+                fft_data = np.fft.fft(phase_data.iloc[:, 1:-1].values.astype(float), axis=0)
+                scale_factor = 0.95
+                magnitudes = np.abs(fft_data)*scale_factor
+                phases = np.angle(fft_data)
+                scaled_fft_data = magnitudes * np.exp(1j*phases)
+                # inverse fft
+                sacled_bone_rot = np.fft.ifft(scaled_fft_data, axis=0)
+                augmented_data = sacled_bone_rot.real.astype(float)
+                phase_data = pd.DataFrame(data=augmented_data, columns=phase_data.columns[1:-1])
+                
             if frame_length == 0:
                 ic(phase_data.head())
                 raise ValueError(f"{phase} frame length is 0. Data path is {path}")
             # process armature rotation
-            arm_rot = torch.tensor(phase_data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]].values)
+            arm_rot = torch.tensor(phase_data[["arm_rot_x", "arm_rot_y", "arm_rot_z"]].values)
             # euler angles to rotation matrix
             arm_rot = euler_angles_to_matrix(arm_rot, "XYZ")
             # rotation matrix to 6D representation
@@ -68,6 +84,7 @@ class FallingData(Dataset):
 
             # armature location
             arm_loc = torch.tensor(phase_data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]].values)
+            # set the starting location of the armature to be the origin
             # process bone rotation
             bone_rot = torch.tensor(
                 phase_data.loc[:, "Pelvis_x":"R_Hand_z"].values

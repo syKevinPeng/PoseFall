@@ -33,43 +33,44 @@ dataset = np.loadtxt(save_path, delimiter=',', dtype=str)
 column_name = dataset[0]
 dataset = dataset[1:]
 
-
-pre_aug_start = 35
-pre_aug_end = 55
-post_aug_start = 95
-post_aug_end = 105
-from scipy.interpolate import CubicSpline
+from scipy.interpolate import interp1d
 
 # select mid 50 frames
-aug_dataset = dataset[50:100]
+aug_dataset = dataset
+print(f"Before size: {aug_dataset.shape}")
+speed_factor = 5
+time_vector = np.arange(aug_dataset.shape[0])
+new_time_vector = np.linspace(time_vector[0], time_vector[-1], int(len(time_vector) / speed_factor))
+interpolating_function = interp1d(time_vector, aug_dataset, axis=0, kind='linear')
+resampled_data = interpolating_function(new_time_vector)
 # perform fft along the time dimension
-fft_data = np.fft.fft(aug_dataset[:, 7:].astype(float), axis=0)
-scale_factor = 0.8
+fft_data = np.fft.fft(resampled_data.astype(float), axis=0)
+scale_factor = 0.95
 magnitudes = np.abs(fft_data)*scale_factor
 phases = np.angle(fft_data)
 scaled_fft_data = magnitudes * np.exp(1j*phases)
 # inverse fft
 sacled_bone_rot = np.fft.ifft(scaled_fft_data, axis=0)
-dataset[50:100, 7:] = sacled_bone_rot.real.astype(float)
+dataset = sacled_bone_rot.real.astype(float)
+print(dataset.shape)
+# # applying cubic spline interpolation
+# # Create spline interpolation for the start boundary
+# x = np.arange(pre_aug_start, pre_aug_end)
+# y_start = dataset[x, 7:].astype(float)
+# cs_start = CubicSpline(x, y_start, axis=0, bc_type='natural')
 
-# applying cubic spline interpolation
-# Create spline interpolation for the start boundary
-x = np.arange(pre_aug_start, pre_aug_end)
-y_start = dataset[x, 7:].astype(float)
-cs_start = CubicSpline(x, y_start, axis=0, bc_type='natural')
+# # Create spline interpolation for the end boundary
+# x = np.arange(post_aug_start, post_aug_end)
+# y_end = dataset[x, 7:].astype(float)
+# cs_end = CubicSpline(x, y_end, axis=0, bc_type='natural')
 
-# Create spline interpolation for the end boundary
-x = np.arange(post_aug_start, post_aug_end)
-y_end = dataset[x, 7:].astype(float)
-cs_end = CubicSpline(x, y_end, axis=0, bc_type='natural')
+# # Apply the interpolation to create a smooth transition
+# interp_start = cs_start(np.linspace(pre_aug_start, pre_aug_end, pre_aug_end - pre_aug_start))
+# interp_end = cs_end(np.linspace(post_aug_start, post_aug_end, post_aug_end - post_aug_start))
 
-# Apply the interpolation to create a smooth transition
-interp_start = cs_start(np.linspace(pre_aug_start, pre_aug_end, pre_aug_end - pre_aug_start))
-interp_end = cs_end(np.linspace(post_aug_start, post_aug_end, post_aug_end - post_aug_start))
-
-# Replace the boundary regions
-dataset[pre_aug_start:pre_aug_end, 7:] = interp_start
-dataset[post_aug_start:post_aug_end, 7:] = interp_end
+# # Replace the boundary regions
+# dataset[pre_aug_start:pre_aug_end, 7:] = interp_start
+# dataset[post_aug_start:post_aug_end, 7:] = interp_end
 
 
 # loop through each frame

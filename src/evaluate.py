@@ -131,7 +131,7 @@ if __name__ == "__main__":
         frames = visulize_poses(df)
         # save frames
         imageio.mimsave(Path(args.output_path)/f"{idx}_sequences.gif", frames, fps=30)
-        if idx == args.num_to_gen:
+        if idx == args.num_to_gen-1:
             break
 
     print(f"Generated {args.num_to_gen} sequences and saved them to {args.output_path}")

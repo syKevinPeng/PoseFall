@@ -102,10 +102,11 @@ pretrained_weights = Path("/home/siyuan/research/PoseFall/src/model/pretrained_m
 if not pretrained_weights.exists():
     raise ValueError(f"Pretrained weights {pretrained_weights} does not exist")
 weight = torch.load(pretrained_weights)
+
 # only get the encoder weights
 encoder_weight = {}
 for key in weight.keys():
-    if "encoder" in key.split(".")[0]:
+    if "encoder.seqTransEncoder" in key:
         encoder_weight[key] = weight[key]
 duplicated_weight = {}
 for phase in PHASES:

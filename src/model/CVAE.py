@@ -3,7 +3,7 @@ This file contains CVAE model. Refer to model.py for the encoder and decoder
 """
 from ast import parse
 from turtle import forward
-from scipy import interpolate
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -90,87 +90,13 @@ class CAVE(nn.Module):
     #     # reparameterize
     #     batch[f"z"] = self.reparameterize(batch)
     #     return batch["z"]
-
-    def compute_loss(self, batch, phase_name):
-        pred_batch = batch[f"{phase_name}_output"]
-        input_batch = batch[f"{phase_name}_combined_poses"]
-        mask_batch = batch[f"{phase_name}_src_key_padding_mask"]
-
-        padding = ~(mask_batch.bool().unsqueeze(-1).expand(-1, -1, pred_batch.size(-1)))
-        pred_batch = pred_batch * padding
-        input_batch = input_batch * padding
-
-        # human model param l2 loss
-        human_model_loss = human_param_loss(pred_batch, input_batch)
-
-        # KL divergence loss
-        mu, logvar = batch[f"{phase_name}_mu"], batch[f"{phase_name}_sigma"]
-        kl_loss = kl_divergence(mu, logvar)
-
-        # vertex loss
-        vertex_locs_loss = vertex_loss(pred_batch, input_batch)
-        # loss weight
-        loss_weight = {
-            "human_model_loss": 1,
-            "kl_loss": 1e-3,
-            "vertex_loss": 1,
-        }
-        # compute loss
-        total_phase_loss = (
-            loss_weight["human_model_loss"] * human_model_loss
-            + loss_weight["kl_loss"] * kl_loss
-            + loss_weight["vertex_loss"] * vertex_locs_loss
-        )
-        return total_phase_loss
     
-    def compute_inter_phase_loss(self, batch):
-        """
-        take 10% of the end of the first phase and 10% of the beginning of the second phase
-        compute the first derivative of the joint location        
-        """
-        inter_phase_loss = 0
-        for i in range(len(self.phase_names)-1):
-            first_phase = self.phase_names[i]
-            second_phase = self.phase_names[i+1]
-            pred_first_phase = batch[f"{first_phase}_output"]
-            pred_second_phase = batch[f"{second_phase}_output"]
-            # take the last 10% of the first phase
-            first_phase_last_10 = int(pred_first_phase.size(1) * 0.1)
-            # take the first 10% of the second phase
-            second_phase_first_10 = int(pred_second_phase.size(1) * 0.1)
-            # concatenate the two phase
-            combined_pred = torch.cat((pred_first_phase[:, -first_phase_last_10:, :], pred_second_phase[:, :second_phase_first_10, :]), dim=1)
-            # get the joint locations using SMPL model
-            smpl_model = SMPLModel().eval().to(DEVICE)
-            # get the vertex locations
-            _, joint_locs = smpl_model(combined_pred)
-            # take the first 24 joints (there are only 24 joints for SMPL model but they author make it more to fit for other models)
-            joint_locs = joint_locs[:, :, :24, :]
-            # calculate the first derivative of the joint locations
-            joint_locs_diff = joint_locs[:, 1:, :, :] - joint_locs[:, :-1, :, :]
-            # calculate the variance across the time
-            joint_locs_diff_var = torch.var(joint_locs_diff, dim=1)
-            # calculate the mean of the variance
-            inter_phase_loss += torch.mean(joint_locs_diff_var)
-
-            # Spline loss: calculate the different between the actual location and the interpolated location
-            interpolated_joint_locs = scipy.interpolate.CubicSpline(
-                x=torch.linspace(0, 1, joint_locs.size(1)), y=joint_locs.cpu().detach().numpy(), axis=1
-            )(torch.linspace(0, 1, joint_locs.size(1)))
-            interpolated_joint_locs = torch.tensor(interpolated_joint_locs).to(DEVICE)
-            
-            # calculate the l2 difference between the actual location and the spline location
-            spline_loss = torch.mean(torch.square(joint_locs - interpolated_joint_locs))
-            inter_phase_loss += spline_loss
-
-        return inter_phase_loss
-
 
     def compute_all_phase_loss(self, batch):
         total_loss = 0
         for phase in self.phase_names:   
-            total_loss += self.compute_loss(batch, phase)
-        interphase_loss = self.compute_inter_phase_loss(batch)
+            total_loss += compute_in_phase_loss(batch, phase)
+        interphase_loss = compute_inter_phase_loss(self.phase_names, batch)
         total_loss += interphase_loss
         return total_loss
     
