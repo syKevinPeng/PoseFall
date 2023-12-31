@@ -6,6 +6,7 @@ from data_processing.utils import rotation_6d_to_matrix
 import torch
 import torch.nn.functional as F
 import scipy
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class SMPLModel(nn.Module):
@@ -65,10 +66,21 @@ def vertex_loss(pred_batch, input_batch):
     vertex_locs = F.mse_loss(pred_vertex_locs, gt_vertex_locs, reduction="mean")
     return vertex_locs
 
-def compute_in_phase_loss(self, batch, phase_name):
-    pred_batch = batch[f"{phase_name}_output"]
-    input_batch = batch[f"{phase_name}_combined_poses"]
-    mask_batch = batch[f"{phase_name}_src_key_padding_mask"]
+def compute_in_phase_loss(batch, phase_name):
+    if phase_name:
+        pred_batch = batch[f"{phase_name}_output"]
+        input_batch = batch[f"{phase_name}_combined_poses"]
+        mask_batch = batch[f"{phase_name}_src_key_padding_mask"]
+        mu, logvar = batch[f"{phase_name}_mu"], batch[f"{phase_name}_sigma"]
+    else:
+        pred_batch = batch["output"]
+        # input_batch = batch["combined_poses"]
+        mask_batch = batch["src_key_padding_mask"]
+        mu, logvar = batch["mu"], batch["sigma"]
+        for phase in PHASES:
+            input_batch = batch[f"{phase}_combined_poses"]
+            print(f"input batch shape: {input_batch.size()}")
+            break
 
     padding = ~(mask_batch.bool().unsqueeze(-1).expand(-1, -1, pred_batch.size(-1)))
     pred_batch = pred_batch * padding
@@ -78,7 +90,6 @@ def compute_in_phase_loss(self, batch, phase_name):
     human_model_loss = human_param_loss(pred_batch, input_batch)
 
     # KL divergence loss
-    mu, logvar = batch[f"{phase_name}_mu"], batch[f"{phase_name}_sigma"]
     kl_loss = kl_divergence(mu, logvar)
 
     # vertex loss

@@ -1,11 +1,13 @@
 import argparse
+from click import option
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from dataloader import FallingData
-from model.CVAE import CAVE
+from model.CVAE import CVAE
+from model.CVAE_1D import CVAE1D
 from icecream import ic
-import wandb
+import wandb, yaml
 from pathlib import Path
 import datetime, re
 from tqdm import tqdm
@@ -15,71 +17,46 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(description="Training script")
-parser.add_argument(
-    "--data_path",
-    type=str,
-    default="/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data",
-    help="path to the data directory",
-)
-parser.add_argument("--lr", type=float, default=1e-5, help="learning rate")
-parser.add_argument("--batch_size", type=int, default=16, help="batch size")
-parser.add_argument(
-    "--num_workers", type=int, default=4, help="number of workers for data loading"
-)
-parser.add_argument("--epochs", type=int, default=1000)
-parser.add_argument(
-    "--wandb_project", type=str, default="posefall", help="wandb project name"
-)
-parser.add_argument("--wandb_mode", type=str, default="disabled", help="wandb mode")
-parser.add_argument("--wandb_tag", type=str, default="train", help="wandb tag")
-parser.add_argument(
-    "--wandb_exp_name", type=str, default="test", help="wandb experiment name"
-)
-parser.add_argument(
-    "--wandb_exp_description", type=str, default="", help="wandb experiment description"
-)  # Added argument for experiment description
-parser.add_argument(
-    "--ckpt_path", type=str, default="", help="path to save checkpoints"
-)
-parser.add_argument(
-    "--model_save_freq", type=int, default=200, help="frequency to save model"
-)
-args = parser.parse_args()
-
+parser.add_argument("--config_path", type=str, default="config.yaml", help="path to config file")
+cmd_args = parser.parse_args()
+# load config file
+with open(cmd_args.config_path, "r") as f:
+    args = yaml.load(f, Loader=yaml.FullLoader)
 # ======================== prepare wandb ========================
 # Initialize wandb
+wandb_config = args['wandb_config']
 wandb.init(
-    project=args.wandb_project,
+    project=wandb_config['wandb_project'],
     config=args,
-    mode=args.wandb_mode,
-    tags=args.wandb_tag,
-    name=args.wandb_exp_name,
-    notes=args.wandb_exp_description,
+    mode=wandb_config['wandb_mode'],
+    tags=wandb_config['wandb_tags'],
+    name=wandb_config['wandb_exp_name'],
+    notes=wandb_config['wandb_description'],
 )
 
 # ======================== prepare files/folders ========================
 # check if ckpt path exists
-if args.ckpt_path == "":
+if args["data_config"]["ckpt_path"] == "":
     ckpt_path = Path(wandb.run.dir)
 else:
-    ckpt_path = Path(args.ckpt_path)
+    ckpt_path = Path(args["data_config"]["ckpt_path"])
     if not ckpt_path.exists():
         ckpt_path.mkdir(parents=True, exist_ok=True)
         print(f"Created checkpoint path {ckpt_path}")
 current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-ckpt_path = ckpt_path / f"{current_time}_{args.wandb_exp_name}"
+ckpt_path = ckpt_path / f"{current_time}_{wandb_config['wandb_exp_name']}"
 ckpt_path.mkdir(parents=True, exist_ok=True)
 
 # ======================== define variables for training ========================
-# TODO: create a config file for all the variables
 # Define phases and data loader
-PHASES = ["impa", "glit", "fall"]
-data = FallingData(args.data_path)
+PHASES = args["constant"]["PHASES"]
+train_config = args["train_hyperparameters"]
+data = FallingData(args["data_config"]["data_path"])
 dataloaders = torch.utils.data.DataLoader(
     data,
-    batch_size=args.batch_size,
+    batch_size=train_config["batch_size"],
     shuffle=True,
-    num_workers=args.num_workers,
+    num_workers=train_config["num_workers"],
 )
 
 # Get number of classes for each phase
@@ -94,8 +71,13 @@ num_class = {
 
 # ======================== actual training pipeline ========================
 # Initialize model and optimizer
-model = CAVE(phase_names=PHASES, num_classes_dict=num_class).to(DEVICE)
-optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+if train_config["model_type"] == "CAVE":
+    model = CVAE(phase_names=PHASES, num_classes_dict=num_class).to(DEVICE)
+elif train_config["model_type"] == "CVAE_1D":
+    model = CVAE1D(phase_names=PHASES, num_classes_dict=num_class).to(DEVICE)
+else:
+    raise ValueError(f"Model type {train_config['model_type']} not supported")
+optimizer = torch.optim.Adam(model.parameters(), lr=train_config["lr"])
 
 # load pretrained model
 pretrained_weights = Path("/home/siyuan/research/PoseFall/src/model/pretrained_models/humanact12/checkpoint_5000.pth.tar")
@@ -121,7 +103,7 @@ for key in duplicated_weight.keys():
 # load the state dict to the model
 model.load_state_dict(duplicated_weight, strict=False)
 
-for epoch in range(args.epochs):  # Epoch loop
+for epoch in range(train_config['epochs']):  # Epoch loop
     epoch_loss = 0
     print(f"=== training on epoch {epoch} ===")
     for i_batch, (data_dict) in tqdm(enumerate(dataloaders), total=len(dataloaders)):
@@ -134,6 +116,6 @@ for epoch in range(args.epochs):  # Epoch loop
     wandb.log({"epoch_loss": epoch_loss})
     print(f"Epoch {epoch}: loss {epoch_loss}")
     # Save model checkpoint
-    if (epoch + 1) % args.model_save_freq == 0:  # Save every 10 epochs
+    if (epoch + 1) % train_config['model_save_freq'] == 0:  # Save every 10 epochs
         checkpoint_path = ckpt_path / f"epoch_{epoch}.pth"
         torch.save(model.state_dict(), checkpoint_path)

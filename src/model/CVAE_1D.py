@@ -12,11 +12,11 @@ from icecream import ic
 from model.model import Encoder, Decoder
 import wandb, scipy
 
-class CVAE(nn.Module):
+class CVAE1D(nn.Module):
     """
-    CVAE model with three decoder and three encoders.
+    CVAE model with three encoder and one decoders. 
     """
-    def __init__(self, phase_names, num_classes_dict, latent_dim = 256, device = "cuda") -> None:
+    def __init__(self, phase_names, num_classes_dict:dict, latent_dim = 256, device = "cuda") -> None:
         super().__init__()
         self.phase_names = phase_names
         self.num_classes_dict = num_classes_dict
@@ -29,28 +29,28 @@ class CVAE(nn.Module):
                 f"{phase}_encoder",
                 Encoder(num_classes=num_classes_dict[phase], phase_names=phase, latent_dim=self.latent_dim),
             )
-            setattr(
-                self,
-                f"{phase}_decoder",
-                Decoder(num_classes=num_classes_dict[phase], phase_names=phase, latent_dim=self.latent_dim),
-            )
+        self.decoder = Decoder(sum(num_classes_dict.values()), phase_names, latent_dim=self.latent_dim*3)
 
         print(f"CAVE model initialized with phases: {self.phase_names}")
 
-    def reparameterize(self, batch, phase_name, seed=None):
+    def reparameterize(self, batch, seed=None): 
         """
-        reparameterize the latent variable
+        reparameterize the latent variable: Multi variate Gaussian
         """
-        mu, sigma = batch[f"{phase_name}_mu"], batch[f"{phase_name}_sigma"]
-        std = torch.exp(sigma / 2)
-        if seed:
-            generator = torch.Generator(device=self.device)
-            generator.manual_seed(seed)
-            eps = std.data.new(std.size()).normal_(generator=generator)
-        else:
-            eps = std.data.new(std.size()).normal_()
-        eps = torch.randn_like(sigma)
-        return mu + eps * sigma  # eps.mul(std).add_(mu)
+        reparameterized = []
+        for phase in self.phase_names:
+            mu, sigma = batch[f"{phase}_mu"], batch[f"{phase}_sigma"]
+            std = torch.exp(sigma / 2)
+            if seed:
+                generator = torch.Generator(device=self.device)
+                generator.manual_seed(seed)
+                eps = std.data.new(std.size()).normal_(generator=generator)
+            else:
+                eps = std.data.new(std.size()).normal_()
+            eps = torch.randn_like(sigma)
+            curr_repara = mu + eps * sigma  # eps.mul(std).add_(mu)
+            reparameterized.append(curr_repara)
+        return torch.concat(reparameterized, dim=1)
 
     def prepare_batch(self, batch):
         for phase in self.phase_names:
@@ -69,22 +69,10 @@ class CVAE(nn.Module):
             encoder_output = getattr(self, f"{phase}_encoder")(batch)
             encoder_output_list.extend([encoder_output[f"{phase}_mu"], encoder_output[f"{phase}_sigma"]])
             batch.update(encoder_output)
-
-        # fuse the encoder output by concate output layers and project to 3 mus and 3 sigmas
-        concated_output = torch.cat(encoder_output_list, dim=1).to(self.device)
-        fuse_layer = nn.Linear(concated_output.size(1), concated_output.size(1)).to(self.device)
-        fused_output = fuse_layer(concated_output).reshape(batch_size, 6, -1)
-        # assign mu and sigma back to the batch
-        for i, phase in enumerate(self.phase_names):
-            batch[f"{phase}_mu"] = fused_output[:, 2*i, :]
-            batch[f"{phase}_sigma"] = fused_output[:, 2*i+1, :]
-
-        for phase in self.phase_names:
-            # reparameterize
-            batch[f"{phase}_z"] = self.reparameterize(batch, phase_name=phase) # shape(batch_size, latent_dim)
-        for phase in self.phase_names:
-            # Decoder
-            batch.update(getattr(self, f"{phase}_decoder")(batch))
+        # reparameterize
+        batch[f"z"] = self.reparameterize(batch) # shape(batch_size, latent_dim)
+        # decoder
+        batch.update(self.decoder(batch))
         return batch
 
     # def return_latent(self, batch):
@@ -96,11 +84,8 @@ class CVAE(nn.Module):
     
 
     def compute_all_phase_loss(self, batch):
-        total_loss = 0
-        for phase in self.phase_names:   
-            total_loss += compute_in_phase_loss(batch, phase)
-        interphase_loss = compute_inter_phase_loss(self.phase_names, batch)
-        total_loss += interphase_loss
+        total_loss = 0 
+        total_loss += compute_in_phase_loss(batch, phase_name=None)
         return total_loss
     
     def generate(self, input_batch):

@@ -1,0 +1,30 @@
+train_hyperparameters:
+  epochs: 1000
+  batch_size: 16
+  model_type: 'CVAE_1D'
+  lr: 0.00001
+  num_workers: 4
+  model_save_freq: 200
+
+wandb_config:
+  wandb_mode: 'disabled'
+  wandb_project: 'posefall'
+  wandb_exp_name: "exp_6"
+  wandb_tags: ['CVAE_1D', 'train']
+  wandb_description: "CVAE_1D: With spline loss and smoothness loss. With data aug. Pretrained weights on Encoder. KL divergence loss: 0.1. Decreased smoothness loss"
+
+data_config:
+  data_path: "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
+  ckpt_path: ""
+
+
+loss_config:
+  kl_loss_weight: 0.1
+  spline_loss_weight: 1
+  smoothness_loss_weight: 0.1
+
+constant:
+  PHASES:
+    - 'impa'
+    - 'glit'
+    - 'fall'

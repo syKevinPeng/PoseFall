@@ -181,11 +181,20 @@ class Decoder(nn.Module):
         self.final_layer = nn.Linear(self.latent_dim, self.input_feats)
 
     def forward(self, batch):
-        z, y, mask = (
-            batch[f"{self.phase_names}_z"],
-            batch[f"{self.phase_names}_label"],
-            batch[f"{self.phase_names}_src_key_padding_mask"],
-        )
+        z = batch["z"]
+        label_list = []
+        padding_list = []
+        for phase in self.phase_names:
+            label_list.append(batch[f"{phase}_label"])
+            padding_list.append(batch[f"{phase}_src_key_padding_mask"])
+        y = torch.cat(label_list, dim=1)
+        mask = torch.cat(padding_list, dim=1)
+
+        print(f"z size: {z.size()}")
+        print(f"y size: {y.size()}")
+        print(f"mask size: {mask.size()}")
+        print(f"action biases size: {self.action_biases.size()}")
+
         latent_dim = z.size(1)
         batch_size, num_frames = mask.shape
         # shift the latent noise vector to be the action noise
@@ -209,5 +218,5 @@ class Decoder(nn.Module):
         # expand the mask to the output size
         # padding = mask.bool().unsqueeze(-1).expand(-1, -1, output.size(-1))
         # output[padding] = 0
-        batch[f"{self.phase_names}_output"] = output
+        batch[f"output"] = output
         return batch
