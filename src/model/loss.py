@@ -66,7 +66,7 @@ def vertex_loss(pred_batch, input_batch):
     vertex_locs = F.mse_loss(pred_vertex_locs, gt_vertex_locs, reduction="mean")
     return vertex_locs
 
-def compute_in_phase_loss(batch, phase_name):
+def compute_in_phase_loss(batch, phase_name, all_phases, weight_dict):
     if phase_name:
         pred_batch = batch[f"{phase_name}_output"]
         input_batch = batch[f"{phase_name}_combined_poses"]
@@ -74,13 +74,9 @@ def compute_in_phase_loss(batch, phase_name):
         mu, logvar = batch[f"{phase_name}_mu"], batch[f"{phase_name}_sigma"]
     else:
         pred_batch = batch["output"]
-        # input_batch = batch["combined_poses"]
-        mask_batch = batch["src_key_padding_mask"]
-        mu, logvar = batch["mu"], batch["sigma"]
-        for phase in PHASES:
-            input_batch = batch[f"{phase}_combined_poses"]
-            print(f"input batch shape: {input_batch.size()}")
-            break
+        input_batch = batch["combined_poses"]
+        mask_batch = batch["combined_src_key_padding_mask"]
+        mu, logvar = batch["combined_mu"], batch["combined_sigma"]
 
     padding = ~(mask_batch.bool().unsqueeze(-1).expand(-1, -1, pred_batch.size(-1)))
     pred_batch = pred_batch * padding
@@ -95,20 +91,16 @@ def compute_in_phase_loss(batch, phase_name):
     # vertex loss
     vertex_locs_loss = vertex_loss(pred_batch, input_batch)
     # loss weight
-    loss_weight = {
-        "human_model_loss": 1,
-        "kl_loss": 0.1,
-        "vertex_loss": 1,
-    }
+    loss_weight = weight_dict
     # compute loss
     total_phase_loss = (
-        loss_weight["human_model_loss"] * human_model_loss
-        + loss_weight["kl_loss"] * kl_loss
-        + loss_weight["vertex_loss"] * vertex_locs_loss
+        loss_weight["human_model_loss_weight"] * human_model_loss
+        + loss_weight["kl_loss_weight"] * kl_loss
+        + loss_weight["vertex_loss_weight"] * vertex_locs_loss
     )
     return total_phase_loss
 
-def compute_inter_phase_loss(phase_names,batch):
+def compute_inter_phase_loss(phase_names,batch, loss_weight):
     """
     take 10% of the end of the first phase and 10% of the beginning of the second phase
     compute the first derivative of the joint location        

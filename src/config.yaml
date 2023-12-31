@@ -1,6 +1,6 @@
 train_hyperparameters:
   epochs: 1000
-  batch_size: 16
+  batch_size: 8
   model_type: 'CVAE_1D'
   lr: 0.00001
   num_workers: 4
@@ -19,7 +19,9 @@ data_config:
 
 
 loss_config:
-  kl_loss_weight: 0.1
+  human_model_loss_weight: 1
+  vertex_loss_weight: 1
+  kl_loss_weight: 0.001
   spline_loss_weight: 1
   smoothness_loss_weight: 0.1
 

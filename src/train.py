@@ -72,9 +72,9 @@ num_class = {
 # ======================== actual training pipeline ========================
 # Initialize model and optimizer
 if train_config["model_type"] == "CAVE":
-    model = CVAE(phase_names=PHASES, num_classes_dict=num_class).to(DEVICE)
+    model = CVAE(num_classes_dict=num_class, config = args).to(DEVICE)
 elif train_config["model_type"] == "CVAE_1D":
-    model = CVAE1D(phase_names=PHASES, num_classes_dict=num_class).to(DEVICE)
+    model = CVAE1D(num_classes_dict=num_class, config = args).to(DEVICE)
 else:
     raise ValueError(f"Model type {train_config['model_type']} not supported")
 optimizer = torch.optim.Adam(model.parameters(), lr=train_config["lr"])
@@ -109,7 +109,7 @@ for epoch in range(train_config['epochs']):  # Epoch loop
     for i_batch, (data_dict) in tqdm(enumerate(dataloaders), total=len(dataloaders)):
         optimizer.zero_grad()
         batch = model(batch=data_dict)
-        loss = model.compute_all_phase_loss(batch)
+        loss = model.compute_loss(batch)
         loss.backward()
         optimizer.step()
         epoch_loss += loss.item()

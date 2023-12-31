@@ -16,9 +16,9 @@ class CVAE(nn.Module):
     """
     CVAE model with three decoder and three encoders.
     """
-    def __init__(self, phase_names, num_classes_dict, latent_dim = 256, device = "cuda") -> None:
+    def __init__(self, num_classes_dict, config, latent_dim = 256, device = "cuda") -> None:
         super().__init__()
-        self.phase_names = phase_names
+        self.phase_names = config['constant']['PHASES']
         self.num_classes_dict = num_classes_dict
         self.device = device
         self.latent_dim =latent_dim
@@ -34,6 +34,7 @@ class CVAE(nn.Module):
                 f"{phase}_decoder",
                 Decoder(num_classes=num_classes_dict[phase], phase_names=phase, latent_dim=self.latent_dim),
             )
+        self.config = config
 
         print(f"CAVE model initialized with phases: {self.phase_names}")
 
@@ -95,10 +96,10 @@ class CVAE(nn.Module):
     #     return batch["z"]
     
 
-    def compute_all_phase_loss(self, batch):
+    def compute_loss(self, batch):
         total_loss = 0
         for phase in self.phase_names:   
-            total_loss += compute_in_phase_loss(batch, phase)
+            total_loss += compute_in_phase_loss(batch, phase, all_phases=self.phase_names, weight_dict=self.config['loss_config'])
         interphase_loss = compute_inter_phase_loss(self.phase_names, batch)
         total_loss += interphase_loss
         return total_loss

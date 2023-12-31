@@ -1,7 +1,8 @@
 """
-This file contains CVAE model. Refer to model.py for the encoder and decoder
+This file contains CVAE_1D model. Refer to model.py for the encoder and decoder
 """
 from ast import parse
+from pickle import NONE
 from turtle import forward
 
 import torch
@@ -11,14 +12,15 @@ from .loss import *
 from icecream import ic
 from model.model import Encoder, Decoder
 import wandb, scipy
+from .CVAE import CVAE
 
-class CVAE1D(nn.Module):
+class CVAE1D(CVAE):
     """
     CVAE model with three encoder and one decoders. 
     """
-    def __init__(self, phase_names, num_classes_dict:dict, latent_dim = 256, device = "cuda") -> None:
-        super().__init__()
-        self.phase_names = phase_names
+    def __init__(self, num_classes_dict:dict, config, latent_dim = 256, device = "cuda") -> None:
+        super().__init__(num_classes_dict, config)
+        self.phase_names = config['constant']['PHASES']
         self.num_classes_dict = num_classes_dict
         self.device = device
         self.latent_dim =latent_dim
@@ -29,39 +31,44 @@ class CVAE1D(nn.Module):
                 f"{phase}_encoder",
                 Encoder(num_classes=num_classes_dict[phase], phase_names=phase, latent_dim=self.latent_dim),
             )
-        self.decoder = Decoder(sum(num_classes_dict.values()), phase_names, latent_dim=self.latent_dim*3)
+        self.decoder = Decoder(sum(num_classes_dict.values()), phase_names="combined", latent_dim=self.latent_dim*3)
+        self.config = config
 
-        print(f"CAVE model initialized with phases: {self.phase_names}")
-
-    def reparameterize(self, batch, seed=None): 
+    def reparameterize(self, batch:dict, seed=None): 
         """
         reparameterize the latent variable: Multi variate Gaussian
         """
-        reparameterized = []
+        combined_mu = torch.cat([batch[f"{phase}_mu"] for phase in self.phase_names], dim=1)
+        combined_sigma = torch.cat([batch[f"{phase}_sigma"] for phase in self.phase_names], dim=1)
+        # remove phase_mu and phase_sigma from batch
         for phase in self.phase_names:
-            mu, sigma = batch[f"{phase}_mu"], batch[f"{phase}_sigma"]
-            std = torch.exp(sigma / 2)
-            if seed:
-                generator = torch.Generator(device=self.device)
-                generator.manual_seed(seed)
-                eps = std.data.new(std.size()).normal_(generator=generator)
-            else:
-                eps = std.data.new(std.size()).normal_()
-            eps = torch.randn_like(sigma)
-            curr_repara = mu + eps * sigma  # eps.mul(std).add_(mu)
-            reparameterized.append(curr_repara)
-        return torch.concat(reparameterized, dim=1)
+            batch.pop(f"{phase}_mu")
+            batch.pop(f"{phase}_sigma")
+        batch.update({"combined_mu": combined_mu, "combined_sigma": combined_sigma})
+        std = torch.exp(combined_sigma / 2)
+        if seed:
+            generator = torch.Generator(device=self.device)
+            generator.manual_seed(seed)
+            eps = std.data.new(std.size()).normal_(generator=generator)
+        else:
+            eps = std.data.new(std.size()).normal_()
+        eps = torch.randn_like(combined_sigma)
+        z = combined_mu + eps * combined_sigma  # eps.mul(std).add_(mu)
+        return z
+
 
     def prepare_batch(self, batch):
         for phase in self.phase_names:
-            batch[f"{phase}_combined_poses"] = batch[f"{phase}_combined_poses"].to(self.device)
             batch[f"{phase}_label"] = batch[f"{phase}_label"].to(self.device)
-            batch[f"{phase}_src_key_padding_mask"] = batch[f"{phase}_src_key_padding_mask"].to(self.device)
             batch[f"{phase}_lengths"] = batch[f"{phase}_lengths"].to(self.device)
+            batch[f"{phase}_combined_poses"] = batch[f"{phase}_combined_poses"].to(self.device)
+            batch[f"{phase}_src_key_padding_mask"] = batch[f"{phase}_src_key_padding_mask"].to(self.device)
+        batch["combined_poses"] = torch.cat([batch[f"{phase}_combined_poses"] for phase in self.phase_names], dim=1).to(self.device)
+        batch["combined_src_key_padding_mask"] = torch.cat([batch[f"{phase}_src_key_padding_mask"] for phase in self.phase_names], dim=1).to(self.device)
+        batch["combined_label"] = torch.cat([batch[f"{phase}_label"] for phase in self.phase_names], dim=1).to(self.device)
         return batch
 
     def forward(self, batch):
-        batch_size = batch[f"{self.phase_names[0]}_combined_poses"].size(0)
         batch = self.prepare_batch(batch)
         encoder_output_list = []
         for phase in self.phase_names:
@@ -70,23 +77,14 @@ class CVAE1D(nn.Module):
             encoder_output_list.extend([encoder_output[f"{phase}_mu"], encoder_output[f"{phase}_sigma"]])
             batch.update(encoder_output)
         # reparameterize
-        batch[f"z"] = self.reparameterize(batch) # shape(batch_size, latent_dim)
+        batch["z"] = self.reparameterize(batch) # shape(batch_size, latent_dim)
         # decoder
         batch.update(self.decoder(batch))
         return batch
+  
 
-    # def return_latent(self, batch):
-    #     # encode
-    #     batch.update(self.encoder(batch))
-    #     # reparameterize
-    #     batch[f"z"] = self.reparameterize(batch)
-    #     return batch["z"]
-    
-
-    def compute_all_phase_loss(self, batch):
-        total_loss = 0 
-        total_loss += compute_in_phase_loss(batch, phase_name=None)
-        return total_loss
+    def compute_loss(self, batch):
+        return compute_in_phase_loss(batch, phase_name = None, all_phases=self.phase_names, weight_dict=self.config['loss_config'])
     
     def generate(self, input_batch):
         """
