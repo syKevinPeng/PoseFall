@@ -129,4 +129,13 @@ class CVAE(nn.Module):
         for phase in self.phase_names: 
             # Decoder
             model_input_batch.update(getattr(self, f"{phase}_decoder")(model_input_batch))
+
+        # remove the padding based on the mask
+        for phase in self.phase_names:
+            model_input_batch[f"{phase}_output"] = model_input_batch[f"{phase}_output"].cpu().detach()
+            mask = model_input_batch[f"{phase}_src_key_padding_mask"]
+            mask = mask.cpu().detach().bool()
+            # TODO: check this;
+            exit()
+            model_input_batch[f"{phase}_output"] = model_input_batch[f"{phase}_output"][mask, :].reshape(batch_size, -1, model_input_batch[f"{phase}_output"].shape[-1])
         return model_input_batch

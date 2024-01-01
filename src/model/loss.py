@@ -105,6 +105,8 @@ def compute_inter_phase_loss(phase_names,batch, loss_weight):
     take 10% of the end of the first phase and 10% of the beginning of the second phase
     compute the first derivative of the joint location        
     """
+
+    # TODO: deal with the paddings
     inter_phase_loss = 0
     loss_weight = {
         "var_loss": 0.1,

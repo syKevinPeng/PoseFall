@@ -92,23 +92,31 @@ class CVAE1D(CVAE):
         @param input_batch: a dictionary of input batch, it should contains the following keys: impa_label, glit_label, fall_label, impa_length, glit_length, fall_length
         """
         impa_label = input_batch["impa_label"]
-        glit_label = input_batch["glit_label"]
-        fall_label = input_batch["fall_label"]
-        impa_mask  = input_batch["impa_mask"]
-        glit_mask  = input_batch["glit_mask"]
-        fall_mask  = input_batch["fall_mask"]
 
         batch_size = impa_label.size(0)
 
         model_input_batch = {}
+        z_list = []
+        mask_list = []
+        label_list = []
         for phase in self.phase_names:
-            # sample noise
             z = torch.randn(batch_size, self.latent_dim).to(self.device)
-            model_input_batch[f"{phase}_z"] = z
-            model_input_batch[f"{phase}_label"] = input_batch[f"{phase}_label"]
-            model_input_batch[f"{phase}_src_key_padding_mask"] = input_batch[f"{phase}_mask"]
-        
-        for phase in self.phase_names: 
-            # Decoder
-            model_input_batch.update(getattr(self, f"{phase}_decoder")(model_input_batch))
+            z_list.append(z)
+            mask_list.append(input_batch[f"{phase}_mask"])
+            label_list.append(input_batch[f"{phase}_label"])
+        model_input_batch[f"z"] = torch.cat(z_list, dim=1)
+        model_input_batch[f"combined_label"] = torch.cat(label_list, dim=1)
+        model_input_batch[f"combined_src_key_padding_mask"] = torch.cat(mask_list, dim=1)
+        model_input_batch.update(self.decoder(model_input_batch))
+        # remove the padding
+        model_output = model_input_batch["output"]
+        # filter out the positions where the mask is 1
+        mask = model_input_batch["combined_src_key_padding_mask"] # mask: 0 means valid, 1 means invalid
+        # inverse the mask
+        mask = 1-mask
+        mask = mask.unsqueeze(-1).expand(-1, -1, model_output.size(-1))
+        # remove the padding
+        model_output = model_output * mask
+        # remove the rows where all the elements are 0. 
+        model_output = model_output[model_output.sum(dim=2) != 0]
         return model_input_batch
