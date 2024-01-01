@@ -6,16 +6,23 @@ from dataloader import FallingData
 from model.CVAE import CAVE
 from icecream import ic
 import pandas as pd
-from data_processing.utils import parse_output, rotation_6d_to_matrix, matrix_to_euler_angles
+from data_processing.utils import (
+    parse_output,
+    rotation_6d_to_matrix,
+    matrix_to_euler_angles,
+)
 from data_processing import joint_names
 import argparse
+from src.train import PHASES
 from visulization.pose_vis import visulize_poses
 import imageio
+import yaml, wandb
+
 # Set device
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-PHASES = ["impa", "glit", "fall"]
 
 # ckpt_path = "/home/siyuan/research/PoseFall/src/wandb/run-20231221_215107-4o2q6lod/files/2023-12-21_21-51-07_exp0/epoch_1999.p5"
+
 
 def load_ckpts(ckpt_path):
     """
@@ -31,8 +38,8 @@ def load_ckpts(ckpt_path):
 
 
 def prepare_data(data_path):
-# ======================== prepare data ========================
-# data_path = "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
+    # ======================== prepare data ========================
+    # data_path = "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
     data_path = Path(data_path)
     if not data_path.exists():
         raise ValueError(f"Data path {data_path} does not exist")
@@ -58,30 +65,35 @@ def prepare_data(data_path):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--ckpt_path", type=str, default="", help="Path to the checkpoint")
-    parser.add_argument("--data_path", type=str, default="/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data", help="Path to the data")
-    parser.add_argument("--output_path", type=str, default="", help="Path to the output")
-    parser.add_argument("--num_to_gen", type=int, default=1, help="Number of sequences to generate")
+    parser = argparse.ArgumentParser(description="Training script")
     parser.add_argument(
-    "--wandb_project", type=str, default="posefall", help="wandb project name"
+        "--config_path", type=str, default="config.yaml", help="path to config file"
     )
-    parser.add_argument("--wandb_mode", type=str, default="disabled", help="wandb mode")
-    parser.add_argument("--wandb_tag", type=str, default="evaluate", help="wandb tag")
-    parser.add_argument(
-        "--wandb_exp_name", type=str, default="test", help="wandb experiment name"
+    cmd_args = parser.parse_args()
+    # load config file
+    with open(cmd_args.config_path, "r") as f:
+        args = yaml.load(f, Loader=yaml.FullLoader)
+
+    # ======================== prepare wandb ========================
+    # Initialize wandb
+    wandb_config = args["wandb_config"]
+    wandb.init(
+        project=wandb_config["wandb_project"],
+        config=args,
+        mode=wandb_config["wandb_mode"],
+        tags=wandb_config["wandb_tags"],
+        name=wandb_config["wandb_exp_name"],
+        notes=wandb_config["wandb_description"],
     )
-    parser.add_argument(
-        "--wandb_exp_description", type=str, default="", help="wandb experiment description"
-    )  # Added argument for experiment description
-
-    args = parser.parse_args()
-
-    state_dict = load_ckpts(args.ckpt_path)
-    dataloaders, num_class, impa_label, glit_label, fall_label = prepare_data(args.data_path)
-    if not Path(args.output_path).exists():
-        print(f"Output path {args.output_path} does not exist... Creating it")
-        Path(args.output_path).mkdir(parents=True, exist_ok=True)
+    PHASES = args["constant"]["PHASES"]
+    eval_config = args["eval_config"]
+    state_dict = load_ckpts(eval_config["ckpt_path"])
+    dataloaders, num_class, impa_label, glit_label, fall_label = prepare_data(
+        eval_config["data_path"]
+    )
+    if not Path(eval_config["output_path"]).exists():
+        print(f"Output path {eval_config['output_path']} does not exist... Creating it")
+        Path(eval_config["output_path"]).mkdir(parents=True, exist_ok=True)
     # ======================== actual evaluation pipeline ========================
     # Initialize model and optimizer
     model = CAVE(phase_names=PHASES, num_classes_dict=num_class).to(DEVICE)
@@ -90,12 +102,12 @@ if __name__ == "__main__":
 
     for idx, data_dict in enumerate(tqdm(dataloaders)):
         input_batch = {
-                "impa_label": data_dict["impa_label"].to(DEVICE),
-                "glit_label": data_dict["glit_label"].to(DEVICE),
-                "fall_label": data_dict["fall_label"].to(DEVICE),
-                "impa_mask": data_dict["impa_src_key_padding_mask"].to(DEVICE),
-                "glit_mask": data_dict["glit_src_key_padding_mask"].to(DEVICE),
-                "fall_mask": data_dict["fall_src_key_padding_mask"].to(DEVICE),
+            "impa_label": data_dict["impa_label"].to(DEVICE),
+            "glit_label": data_dict["glit_label"].to(DEVICE),
+            "fall_label": data_dict["fall_label"].to(DEVICE),
+            "impa_mask": data_dict["impa_src_key_padding_mask"].to(DEVICE),
+            "glit_mask": data_dict["glit_src_key_padding_mask"].to(DEVICE),
+            "fall_mask": data_dict["fall_src_key_padding_mask"].to(DEVICE),
         }
         genreated_batch = model.generate(input_batch)
         batch_size = input_batch["impa_label"].size(0)
@@ -107,7 +119,9 @@ if __name__ == "__main__":
             mask = input_batch[f"{phase}_mask"]
             mask = mask.cpu().detach().bool()
             # remove the padding but keep the batch dimension
-            model_output = model_output[mask, :].reshape(batch_size, -1, model_output.shape[-1])
+            model_output = model_output[mask, :].reshape(
+                batch_size, -1, model_output.shape[-1]
+            )
             whole_sequences.append(model_output)
         whole_sequences = torch.concat(whole_sequences, axis=1)
         # parse the output
@@ -122,16 +136,22 @@ if __name__ == "__main__":
         arm_loc = parsed_seequnces["arm_loc"]
         # form the output as a dataframe
         joint_name = joint_names.SMPL_JOINT_NAMES
-        joint_name = np.array([[f"{name}_x", f"{name}_y", f"{name}_z"] for name in joint_name]).flatten()
+        joint_name = np.array(
+            [[f"{name}_x", f"{name}_y", f"{name}_z"] for name in joint_name]
+        ).flatten()
         # get the first item in the batch
         data = torch.concatenate([arm_loc, arm_rot, bone_rot], axis=2)[0]
-        df = pd.DataFrame(data=data, 
-                        columns=["arm_loc_x", "arm_loc_y", "arm_loc_z"] + ["arm_rot_x", "arm_rot_y", "arm_rot_z"] + list(joint_name))
+        df = pd.DataFrame(
+            data=data,
+            columns=["arm_loc_x", "arm_loc_y", "arm_loc_z"]
+            + ["arm_rot_x", "arm_rot_y", "arm_rot_z"]
+            + list(joint_name),
+        )
         # visulization
         frames = visulize_poses(df)
         # save frames
-        imageio.mimsave(Path(args.output_path)/f"{idx}_sequences.gif", frames, fps=30)
-        if idx == args.num_to_gen-1:
+        imageio.mimsave(Path(args.output_path) / f"{idx}_sequences.gif", frames, fps=30)
+        if idx == eval_config["num_to_gen"] - 1:
             break
 
     print(f"Generated {args.num_to_gen} sequences and saved them to {args.output_path}")
