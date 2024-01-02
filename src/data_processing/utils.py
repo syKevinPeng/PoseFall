@@ -1,3 +1,4 @@
+from math import e
 import torch
 import torch.nn.functional as F
 import functools
@@ -43,12 +44,80 @@ def matrix_to_rotation_6d(matrix: torch.Tensor) -> torch.Tensor:
     """
     return matrix[..., :2, :].clone().reshape(*matrix.size()[:-2], 6)
 
-def matrix_to_euler_angles(matrix: torch.Tensor, convention: str = "XYZ"):
+# def matrix_to_euler_angles(matrix: torch.Tensor, convention: str = "XYZ"):
+#     """
+#     Convert rotation matrices to Euler angles in radians.
+#     """
+#     if matrix.dim() == 0 or matrix.shape[-2:] != (3, 3):
+#         raise ValueError("Invalid input matrix.")
+#     if len(convention) != 3:
+#         raise ValueError("Convention must have 3 letters.")
+#     if convention[1] in (convention[0], convention[2]):
+#         raise ValueError(f"Invalid convention {convention}.")
+#     for letter in convention:
+#         if letter not in ("X", "Y", "Z"):
+#             raise ValueError(f"Invalid letter {letter} in convention string.")
+
+#     if convention == "XYZ":
+#         sy = torch.sqrt(matrix[..., 0, 0] ** 2 + matrix[..., 1, 0] ** 2)
+#         singular = sy < 1e-6
+#         ax = torch.atan2(matrix[..., 2, 1], matrix[..., 2, 2])
+#         ay = torch.where(singular, torch.tensor(0.0, device=matrix.device), torch.atan2(-matrix[..., 2, 0], sy))
+#         az = torch.where(singular, torch.atan2(-matrix[..., 1, 2], matrix[..., 1, 1]), torch.atan2(matrix[..., 1, 0], matrix[..., 0, 0]))
+#     else:
+#         raise NotImplementedError("Only XYZ convention is implemented.")
+#     return torch.stack((ax, ay, az), dim=-1)
+
+def _index_from_letter(letter: str):
+    if letter == "X":
+        return 0
+    if letter == "Y":
+        return 1
+    if letter == "Z":
+        return 2
+    
+def _angle_from_tan(
+    axis: str, other_axis: str, data, horizontal: bool, tait_bryan: bool
+):
     """
-    Convert rotation matrices to Euler angles in radians.
+    Extract the first or third Euler angle from the two members of
+    the matrix which are positive constant times its sine and cosine.
+
+    Args:
+        axis: Axis label "X" or "Y or "Z" for the angle we are finding.
+        other_axis: Axis label "X" or "Y or "Z" for the middle axis in the
+            convention.
+        data: Rotation matrices as tensor of shape (..., 3, 3).
+        horizontal: Whether we are looking for the angle for the third axis,
+            which means the relevant entries are in the same row of the
+            rotation matrix. If not, they are in the same column.
+        tait_bryan: Whether the first and third axes in the convention differ.
+
+    Returns:
+        Euler Angles in radians for each matrix in data as a tensor
+        of shape (...).
     """
-    if matrix.dim() == 0 or matrix.shape[-2:] != (3, 3):
-        raise ValueError("Invalid input matrix.")
+
+    i1, i2 = {"X": (2, 1), "Y": (0, 2), "Z": (1, 0)}[axis]
+    if horizontal:
+        i2, i1 = i1, i2
+    even = (axis + other_axis) in ["XY", "YZ", "ZX"]
+    if horizontal == even:
+        return torch.atan2(data[..., i1], data[..., i2])
+    if tait_bryan:
+        return torch.atan2(-data[..., i2], data[..., i1])
+    return torch.atan2(data[..., i2], -data[..., i1])
+def matrix_to_euler_angles(matrix, convention: str="XYZ"):
+    """
+    Convert rotations given as rotation matrices to Euler angles in radians.
+
+    Args:
+        matrix: Rotation matrices as tensor of shape (..., 3, 3).
+        convention: Convention string of three uppercase letters.
+
+    Returns:
+        Euler angles in radians as tensor of shape (..., 3).
+    """
     if len(convention) != 3:
         raise ValueError("Convention must have 3 letters.")
     if convention[1] in (convention[0], convention[2]):
@@ -56,16 +125,28 @@ def matrix_to_euler_angles(matrix: torch.Tensor, convention: str = "XYZ"):
     for letter in convention:
         if letter not in ("X", "Y", "Z"):
             raise ValueError(f"Invalid letter {letter} in convention string.")
-
-    if convention == "XYZ":
-        sy = torch.sqrt(matrix[..., 0, 0] ** 2 + matrix[..., 1, 0] ** 2)
-        singular = sy < 1e-6
-        ax = torch.atan2(matrix[..., 2, 1], matrix[..., 2, 2])
-        ay = torch.where(singular, torch.tensor(0.0, device=matrix.device), torch.atan2(-matrix[..., 2, 0], sy))
-        az = torch.where(singular, torch.atan2(-matrix[..., 1, 2], matrix[..., 1, 1]), torch.atan2(matrix[..., 1, 0], matrix[..., 0, 0]))
+    if matrix.size(-1) != 3 or matrix.size(-2) != 3:
+        raise ValueError(f"Invalid rotation matrix  shape f{matrix.shape}.")
+    i0 = _index_from_letter(convention[0])
+    i2 = _index_from_letter(convention[2])
+    tait_bryan = i0 != i2
+    if tait_bryan:
+        central_angle = torch.asin(
+            matrix[..., i0, i2] * (-1.0 if i0 - i2 in [-1, 2] else 1.0)
+        )
     else:
-        raise NotImplementedError("Only XYZ convention is implemented.")
-    return torch.stack((ax, ay, az), dim=-1)
+        central_angle = torch.acos(matrix[..., i0, i0])
+
+    o = (
+        _angle_from_tan(
+            convention[0], convention[1], matrix[..., i2], False, tait_bryan
+        ),
+        central_angle,
+        _angle_from_tan(
+            convention[2], convention[1], matrix[..., i0, :], True, tait_bryan
+        ),
+    )
+    return torch.stack(o, -1)
 
 
 
@@ -143,5 +224,24 @@ def parse_output(sequences):
     bone_rot = sequences[:, :, 9:].reshape(batch_size,-1, 24, 6)
 
     return {'arm_rot': arm_rot, 'arm_loc': arm_loc, 'bone_rot': bone_rot}
+
+if __name__ == "__main__":
+    # test the 6D rotation conversion
+    euler_angles = torch.rand(2, 3)*2*3.1415926-3.1415926
+    # euler_angles = torch.tensor([[0.0, 0.0, 0.0]])
+    print(f'generated euler angles: {euler_angles}')
+    rotation_matrix = euler_angles_to_matrix(euler_angles, "XYZ")
+    print(f'generated rotation matrix: \n{rotation_matrix}')
+    rep_6D = matrix_to_rotation_6d(rotation_matrix)
+    print(f'6D representation: {rep_6D}')
+    # convert it back
+    rotation_matrix_2 = rotation_6d_to_matrix(rep_6D)
+    print(f'converted rotation matrix: \n{rotation_matrix_2}')
+    # convert it to euler angles
+    euler_angles_2 = matrix_to_euler_angles(rotation_matrix_2)
+    print(f'converted euler angles: {euler_angles_2}')
+    # check the difference
+    print(f'difference: {euler_angles_2 - euler_angles}')
+
 
 
