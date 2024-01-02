@@ -100,7 +100,7 @@ def compute_in_phase_loss(batch, phase_name, all_phases, weight_dict):
     )
     return total_phase_loss
 
-def compute_inter_phase_loss(phase_names,batch, loss_weight):
+def compute_inter_phase_loss(phase_names,batch, loss_dict):
     """
     take 10% of the end of the first phase and 10% of the beginning of the second phase
     compute the first derivative of the joint location        
@@ -108,10 +108,10 @@ def compute_inter_phase_loss(phase_names,batch, loss_weight):
 
     # TODO: deal with the paddings
     inter_phase_loss = 0
-    loss_weight = {
-        "var_loss": 0.1,
-        "loc_loss": 1,
-    }
+    # loss_weight = {
+    #     "var_loss": 0.1,
+    #     "loc_loss": 1,
+    # }
     for i in range(len(phase_names)-1):
         first_phase = phase_names[i]
         second_phase = phase_names[i+1]
@@ -134,7 +134,7 @@ def compute_inter_phase_loss(phase_names,batch, loss_weight):
         # calculate the variance across the time
         joint_locs_diff_var = torch.var(joint_locs_diff, dim=1)
         # calculate the mean of the variance
-        inter_phase_loss += torch.mean(joint_locs_diff_var)*loss_weight["var_loss"]
+        inter_phase_loss += torch.mean(joint_locs_diff_var)*loss_dict["var_loss_weight"]
 
         # Spline loss: calculate the different between the actual location and the interpolated location
         interpolated_joint_locs = scipy.interpolate.CubicSpline(
@@ -144,6 +144,6 @@ def compute_inter_phase_loss(phase_names,batch, loss_weight):
         
         # calculate the l2 difference between the actual location and the spline location
         spline_loss = torch.mean(torch.square(joint_locs - interpolated_joint_locs))
-        inter_phase_loss += spline_loss*loss_weight["loc_loss"]
+        inter_phase_loss += spline_loss*loss_dict["loc_loss_weight"]
 
     return inter_phase_loss

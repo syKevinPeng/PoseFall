@@ -42,7 +42,6 @@ class FallingData(Dataset):
         return len(self.data_path)
 
     def __getitem__(self, idx):
-        # TODO: reset the starting location of the armature to be the origin
         path = self.data_path[idx]
         trial_number = int(path.stem.split("_")[1])
         data = pd.read_csv(path, header=0)
@@ -59,11 +58,12 @@ class FallingData(Dataset):
             phase_data = data[data["phase"] == phase]
             # frame length
             frame_length = len(phase_data)
-            # apply fft transformation
+            # Data Augmentation: apply fft transformation
             if self.data_aug:
                 # apply fft transformation
                 fft_data = np.fft.fft(phase_data.iloc[:, 1:-1].values.astype(float), axis=0)
-                scale_factor = 0.95
+                # randomly augment the data by the scale factor of 0.9-1.1
+                scale_factor = np.random.uniform(0.9, 1.1)
                 magnitudes = np.abs(fft_data)*scale_factor
                 phases = np.angle(fft_data)
                 scaled_fft_data = magnitudes * np.exp(1j*phases)
@@ -137,17 +137,6 @@ class FallingData(Dataset):
 
         return data_dict
     
-    # def collate_fn(self, data):
-    #     """
-    #     collate_fn for the dataloader
-    #     """
-    #     data1, data2 = data[0], data[1]
-
-    #     for key1, key2 in zip(data1.keys(), data2.keys()):
-    #         if data1[key1].size() != data2[key2].size():
-    #             print(f'key1: {key1}:{data1[key1]}, key2: {key2}::{data2[key2]}')
-    #     exit()
-    #     return
 
 
 

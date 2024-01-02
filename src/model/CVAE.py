@@ -100,7 +100,7 @@ class CVAE(nn.Module):
         total_loss = 0
         for phase in self.phase_names:   
             total_loss += compute_in_phase_loss(batch, phase, all_phases=self.phase_names, weight_dict=self.config['loss_config'])
-        interphase_loss = compute_inter_phase_loss(self.phase_names, batch)
+        interphase_loss = compute_inter_phase_loss(self.phase_names, batch, loss_dict=self.config['loss_config'])
         total_loss += interphase_loss
         return total_loss
     
@@ -133,9 +133,16 @@ class CVAE(nn.Module):
         # remove the padding based on the mask
         for phase in self.phase_names:
             model_input_batch[f"{phase}_output"] = model_input_batch[f"{phase}_output"].cpu().detach()
-            mask = model_input_batch[f"{phase}_src_key_padding_mask"]
-            mask = mask.cpu().detach().bool()
-            # TODO: check this;
-            exit()
-            model_input_batch[f"{phase}_output"] = model_input_batch[f"{phase}_output"][mask, :].reshape(batch_size, -1, model_input_batch[f"{phase}_output"].shape[-1])
+            # remove the padding
+            model_output = model_input_batch[f"{phase}_output"]
+            # filter out the positions where the mask is 1
+            mask = model_input_batch[f"{phase}_src_key_padding_mask"] # mask: 0 means valid, 1 means invalid
+            # inverse the mask
+            mask = 1-mask
+            mask = mask.unsqueeze(-1).expand(-1, -1, model_output.size(-1))
+            # remove the padding
+            model_output = model_output * mask
+            # remove the rows where all the elements are 0. 
+            model_output = model_output[model_output.sum(dim=2) != 0]
+            model_input_batch[f"{phase}_output"] = model_output
         return model_input_batch

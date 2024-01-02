@@ -44,29 +44,6 @@ def matrix_to_rotation_6d(matrix: torch.Tensor) -> torch.Tensor:
     """
     return matrix[..., :2, :].clone().reshape(*matrix.size()[:-2], 6)
 
-# def matrix_to_euler_angles(matrix: torch.Tensor, convention: str = "XYZ"):
-#     """
-#     Convert rotation matrices to Euler angles in radians.
-#     """
-#     if matrix.dim() == 0 or matrix.shape[-2:] != (3, 3):
-#         raise ValueError("Invalid input matrix.")
-#     if len(convention) != 3:
-#         raise ValueError("Convention must have 3 letters.")
-#     if convention[1] in (convention[0], convention[2]):
-#         raise ValueError(f"Invalid convention {convention}.")
-#     for letter in convention:
-#         if letter not in ("X", "Y", "Z"):
-#             raise ValueError(f"Invalid letter {letter} in convention string.")
-
-#     if convention == "XYZ":
-#         sy = torch.sqrt(matrix[..., 0, 0] ** 2 + matrix[..., 1, 0] ** 2)
-#         singular = sy < 1e-6
-#         ax = torch.atan2(matrix[..., 2, 1], matrix[..., 2, 2])
-#         ay = torch.where(singular, torch.tensor(0.0, device=matrix.device), torch.atan2(-matrix[..., 2, 0], sy))
-#         az = torch.where(singular, torch.atan2(-matrix[..., 1, 2], matrix[..., 1, 1]), torch.atan2(matrix[..., 1, 0], matrix[..., 0, 0]))
-#     else:
-#         raise NotImplementedError("Only XYZ convention is implemented.")
-#     return torch.stack((ax, ay, az), dim=-1)
 
 def _index_from_letter(letter: str):
     if letter == "X":

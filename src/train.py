@@ -1,4 +1,5 @@
 import argparse
+from json import decoder
 from click import option
 import torch
 import torch.nn as nn
@@ -50,8 +51,8 @@ ckpt_path.mkdir(parents=True, exist_ok=True)
 # ======================== define variables for training ========================
 # Define phases and data loader
 PHASES = args["constant"]["PHASES"]
-train_config = args["train_hyperparameters"]
-data = FallingData(args["data_config"]["data_path"])
+train_config = args["train_config"]
+data = FallingData(args["data_config"]["data_path"], data_aug=train_config["data_aug"])
 dataloaders = torch.utils.data.DataLoader(
     data,
     batch_size=train_config["batch_size"],
@@ -71,7 +72,7 @@ num_class = {
 
 # ======================== actual training pipeline ========================
 # Initialize model and optimizer
-if train_config["model_type"] == "CAVE":
+if train_config["model_type"] == "CVAE":
     model = CVAE(num_classes_dict=num_class, config = args).to(DEVICE)
 elif train_config["model_type"] == "CVAE_1D":
     model = CVAE1D(num_classes_dict=num_class, config = args).to(DEVICE)
@@ -79,29 +80,52 @@ else:
     raise ValueError(f"Model type {train_config['model_type']} not supported")
 optimizer = torch.optim.Adam(model.parameters(), lr=train_config["lr"])
 
+# get model weight name
+# model_weight_name = model.state_dict().keys()
+# print(f"Model weight name: {model_weight_name}") #fall_decoder.seqTransDecoder
+
 # load pretrained model
-pretrained_weights = Path("/home/siyuan/research/PoseFall/src/model/pretrained_models/humanact12/checkpoint_5000.pth.tar")
+pretrained_weights = Path(args["data_config"]['pretrained_weights'])
 if not pretrained_weights.exists():
     raise ValueError(f"Pretrained weights {pretrained_weights} does not exist")
 weight = torch.load(pretrained_weights)
 
-# only get the encoder weights
-encoder_weight = {}
-for key in weight.keys():
-    if "encoder.seqTransEncoder" in key:
-        encoder_weight[key] = weight[key]
-duplicated_weight = {}
-for phase in PHASES:
-    # update weights key name
-    for key in encoder_weight.keys():
-        new_key = re.sub(r"(encoder)(?=\.)", f"{phase}_encoder", key, count=1)
-        duplicated_weight[new_key] = encoder_weight[key]
-# check if the keys are the same
-for key in duplicated_weight.keys():
-    if key not in model.state_dict().keys():
-        print(f"Key {key} not in model state dict")
-# load the state dict to the model
-model.load_state_dict(duplicated_weight, strict=False)
+encoder_key = "encoder.seqTransEncoder"
+decoder_key = "decoder.seqTransDecoder"
+
+def load_weights(weight_key:str, pretrain_model_weight, my_model=model):
+    # only get the encoder weights
+    encoder_weight = {}
+    for key in pretrain_model_weight.keys():
+        if weight_key in key:
+            encoder_weight[key] = pretrain_model_weight[key]
+
+    duplicated_weight = {}
+    for phase in PHASES:
+        # update weights key name
+        for key in encoder_weight.keys():
+            if "Encoder" in weight_key:
+                name = "encoder"
+                new_key = re.sub(r"(encoder)(?=\.)", f"{phase}_{name}", key, count=1)
+            elif "Decoder" in weight_key:
+                name = "decoder"
+                new_key = re.sub(r"(decoder)(?=\.)", f"{phase}_{name}", key, count=1)
+                if new_key not in my_model.state_dict().keys():
+                    raise Exception(f"Key {new_key} not in model state dict")
+            else:
+                raise ValueError(f"Weight key {weight_key} not supported")
+            duplicated_weight[new_key] = encoder_weight[key]
+    # check if the keys are the same
+    for key in duplicated_weight.keys():
+        if key not in my_model.state_dict().keys():
+            print(f"Key {key} not in model state dict")
+    # load the state dict to the model
+    return duplicated_weight
+
+pretrained_weights = {}
+pretrained_weights.update(load_weights(encoder_key, weight))
+pretrained_weights.update(load_weights(decoder_key, weight))
+model.load_state_dict(pretrained_weights, strict=False)
 
 for epoch in range(train_config['epochs']):  # Epoch loop
     epoch_loss = 0

@@ -3,7 +3,8 @@ import torch
 from tqdm import tqdm
 from pathlib import Path
 from dataloader import FallingData
-from model.CVAE import CAVE
+from model.CVAE import CVAE
+from model.CVAE_1D import CVAE1D
 from icecream import ic
 import pandas as pd
 from data_processing.utils import (
@@ -13,7 +14,6 @@ from data_processing.utils import (
 )
 from data_processing import joint_names
 import argparse
-from src.train import PHASES
 from visulization.pose_vis import visulize_poses
 import imageio
 import yaml, wandb
@@ -76,7 +76,7 @@ if __name__ == "__main__":
 
     # ======================== prepare wandb ========================
     # Initialize wandb
-    wandb_config = args["wandb_config"]
+    wandb_config = args["eval_config"]["wandb_config"]
     wandb.init(
         project=wandb_config["wandb_project"],
         config=args,
@@ -96,7 +96,10 @@ if __name__ == "__main__":
         Path(eval_config["output_path"]).mkdir(parents=True, exist_ok=True)
     # ======================== actual evaluation pipeline ========================
     # Initialize model and optimizer
-    model = CAVE(phase_names=PHASES, num_classes_dict=num_class).to(DEVICE)
+    if eval_config["model_type"] == "CAVE":
+        model = CVAE(num_classes_dict=num_class, config = args).to(DEVICE)
+    elif eval_config["model_type"] == "CVAE_1D":
+        model = CVAE1D(num_classes_dict=num_class, config = args).to(DEVICE)
     model.load_state_dict(state_dict)
     model.eval()
 
@@ -111,19 +114,23 @@ if __name__ == "__main__":
         }
         genreated_batch = model.generate(input_batch)
         batch_size = input_batch["impa_label"].size(0)
-        whole_sequences = []
-        for phase in PHASES:
-            model_output = genreated_batch[f"{phase}_output"]
-            model_output = model_output.cpu().detach()
-            # remove padding based on the mask
-            mask = input_batch[f"{phase}_mask"]
-            mask = mask.cpu().detach().bool()
-            # remove the padding but keep the batch dimension
-            model_output = model_output[mask, :].reshape(
-                batch_size, -1, model_output.shape[-1]
-            )
-            whole_sequences.append(model_output)
-        whole_sequences = torch.concat(whole_sequences, axis=1)
+        if eval_config["model_type"] == "CVAE":
+            whole_sequences = []
+            for phase in PHASES:
+                model_output = genreated_batch[f"{phase}_output"]
+                model_output = model_output.cpu().detach()
+                # remove padding based on the mask
+                mask = input_batch[f"{phase}_mask"]
+                mask = mask.cpu().detach().bool()
+                # remove the padding but keep the batch dimension
+                model_output = model_output[mask, :].reshape(
+                    batch_size, -1, model_output.shape[-1]
+                )
+                whole_sequences.append(model_output)
+            whole_sequences = torch.concat(whole_sequences, axis=1)
+        elif eval_config["model_type"] == "CVAE_1D":
+            whole_sequences = genreated_batch["output"]
+            whole_sequences = whole_sequences.cpu().detach()
         # parse the output
         parsed_seequnces = parse_output(whole_sequences)
         # convert the rotation to rotation matrix
@@ -150,8 +157,8 @@ if __name__ == "__main__":
         # visulization
         frames = visulize_poses(df)
         # save frames
-        imageio.mimsave(Path(args.output_path) / f"{idx}_sequences.gif", frames, fps=30)
+        imageio.mimsave(Path(eval_config['output_path']) / f"{idx}_sequences.gif", frames, fps=30)
         if idx == eval_config["num_to_gen"] - 1:
             break
 
-    print(f"Generated {args.num_to_gen} sequences and saved them to {args.output_path}")
+    print(f"Generated {eval_config['num_to_gen']} sequences and saved them to {eval_config['output_path']}")

@@ -1,6 +1,7 @@
 """
 This file contains the encoder and decoder for the transformer model. The actual model is in CVAE.py 
 """
+from cmath import phase
 import time
 import torch
 import torch.nn as nn
@@ -146,7 +147,7 @@ class Decoder(nn.Module):
         latent_dim=256,
         num_heads=4,
         dim_feedforward=1024,
-        num_layers=4,
+        num_layers=8,
         dropout=0.1,
         activation="gelu",
     ) -> None:
@@ -166,7 +167,7 @@ class Decoder(nn.Module):
             torch.randn(self.num_classes, self.latent_dim)
         )
 
-        self.trans_layer = nn.TransformerDecoderLayer(
+        self.seqTransDecoderLayer  = nn.TransformerDecoderLayer(
             d_model=self.latent_dim,
             nhead=self.num_heads,
             dim_feedforward=self.dim_feedforward,
@@ -175,18 +176,21 @@ class Decoder(nn.Module):
             batch_first=True,
         )
 
-        self.trans_decoder = nn.TransformerDecoder(
-            self.trans_layer, num_layers=self.num_layers
+        self.seqTransDecoder = nn.TransformerDecoder(
+            self.seqTransDecoderLayer , num_layers=self.num_layers
         )
         self.final_layer = nn.Linear(in_features=self.latent_dim, out_features=self.input_feats)
         if self.phase_names == "combined":
             self.combined = True
+        else:
+            self.combined = False
 
     def forward(self, batch):
-        z = batch["z"]
         if self.combined:
+            z = batch["z"]
             y = batch["combined_label"]
             mask = batch["combined_src_key_padding_mask"]
+        z = batch[f"{self.phase_names}_z"]
         y = batch[f"{self.phase_names}_label"]
         mask = batch[f"{self.phase_names}_src_key_padding_mask"]
         latent_dim = z.size(1)
@@ -202,7 +206,7 @@ class Decoder(nn.Module):
         # sequence encoding
         timequeries = self.pos_encoder(timequeries)
         # decode
-        decoder_output = self.trans_decoder(
+        decoder_output = self.seqTransDecoder(
             tgt=timequeries, memory=shifted_z, tgt_key_padding_mask=mask.bool()
         )
         # get output sequences
@@ -212,5 +216,7 @@ class Decoder(nn.Module):
         # expand the mask to the output size
         # padding = mask.bool().unsqueeze(-1).expand(-1, -1, output.size(-1))
         # output[padding] = 0
-        batch[f"output"] = output
+        batch[f"{self.phase_names}_output"] = output
+        if self.combined:
+            batch["output"] = output
         return batch

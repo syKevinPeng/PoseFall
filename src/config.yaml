@@ -1,31 +1,33 @@
-define: &exp_name "exp_5"
+define: &exp_name "exp_6"
 
-rain_hyperparameters:
-  epochs: 1000
+train_config:
+  epochs: 2000
   batch_size: 8
-  model_type: &train_model_type 'CVAE_1D'
-  lr: 0.00001
+  model_type: &train_model_type 'CVAE'
+  lr: 0.0001
   num_workers: 4
   model_save_freq: 200
+  data_aug: True
 
 wandb_config:
-  wandb_mode: 'online'
+  wandb_mode: 'disabled'
   wandb_project: 'posefall'
   wandb_exp_name: *exp_name
-  wandb_tags: [*train_model_type, 'train']
+  wandb_tags: [*train_model_type, 'train', 'data_aug']
   wandb_description: "CVAE_1D: With data aug. Pretrained weights on Encoder."
 
 data_config:
-  data_path: &data_path "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data" 
+  data_path: &data_path "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
+  pretrained_weights: "/home/siyuan/research/PoseFall/src/model/pretrained_models/humanact12/checkpoint_5000.pth.tar" 
   ckpt_path: ""
 
 
 loss_config:
   human_model_loss_weight: 1
   vertex_loss_weight: 1
-  kl_loss_weight: 0.001
-  spline_loss_weight: 1
-  smoothness_loss_weight: 0.1
+  kl_loss_weight: 0.0001
+  loc_loss_weight: 0
+  var_loss_weight: 0
 
 constant:
   PHASES:
@@ -34,13 +36,13 @@ constant:
     - 'fall'
 
 eval_config:
-  ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20231231_151252-qw6flten/files/2023-12-31_15-12-52_exp_5/epoch_999.pth"
+  ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240101_154946-ja65c2vq/files/2024-01-01_15-49-46_exp_6/epoch_799.pth"
   data_path: *data_path
-  ouput_path: "./gen_results"
+  output_path: "./gen_results"
   num_to_gen: 2
   model_type: &eval_model_type 'CVAE_1D'
   wandb_config:
-    wandb_mode: 'online'
+    wandb_mode: 'disabled'
     wandb_project: 'posefall'
     wandb_exp_name: *exp_name
     wandb_tags: [*eval_model_type, 'eval']
