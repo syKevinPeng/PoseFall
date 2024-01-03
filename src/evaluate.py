@@ -96,7 +96,7 @@ if __name__ == "__main__":
         Path(eval_config["output_path"]).mkdir(parents=True, exist_ok=True)
     # ======================== actual evaluation pipeline ========================
     # Initialize model and optimizer
-    if eval_config["model_type"] == "CAVE":
+    if eval_config["model_type"] == "CVAE":
         model = CVAE(num_classes_dict=num_class, config = args).to(DEVICE)
     elif eval_config["model_type"] == "CVAE_1D":
         model = CVAE1D(num_classes_dict=num_class, config = args).to(DEVICE)
@@ -119,13 +119,6 @@ if __name__ == "__main__":
             for phase in PHASES:
                 model_output = genreated_batch[f"{phase}_output"]
                 model_output = model_output.cpu().detach()
-                # remove padding based on the mask
-                mask = input_batch[f"{phase}_mask"]
-                mask = mask.cpu().detach().bool()
-                # remove the padding but keep the batch dimension
-                model_output = model_output[mask, :].reshape(
-                    batch_size, -1, model_output.shape[-1]
-                )
                 whole_sequences.append(model_output)
             whole_sequences = torch.concat(whole_sequences, axis=1)
         elif eval_config["model_type"] == "CVAE_1D":
@@ -154,6 +147,8 @@ if __name__ == "__main__":
             + ["arm_rot_x", "arm_rot_y", "arm_rot_z"]
             + list(joint_name),
         )
+        # save the dataframe
+        df.to_csv(Path(eval_config['output_path']) / f"{idx}_sequences.csv")
         # visulization
         frames = visulize_poses(df)
         # save frames

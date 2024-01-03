@@ -140,6 +140,6 @@ for epoch in range(train_config['epochs']):  # Epoch loop
     wandb.log({"epoch_loss": epoch_loss})
     print(f"Epoch {epoch}: loss {epoch_loss}")
     # Save model checkpoint
-    if (epoch + 1) % train_config['model_save_freq'] == 0:  # Save every 10 epochs
+    if (epoch ) % train_config['model_save_freq'] == 0:  # Save every 10 epochs
         checkpoint_path = ckpt_path / f"epoch_{epoch}.pth"
         torch.save(model.state_dict(), checkpoint_path)

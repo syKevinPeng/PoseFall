@@ -132,7 +132,7 @@ class CVAE(nn.Module):
 
         # remove the padding based on the mask
         for phase in self.phase_names:
-            model_input_batch[f"{phase}_output"] = model_input_batch[f"{phase}_output"].cpu().detach()
+            model_input_batch[f"{phase}_output"] = model_input_batch[f"{phase}_output"]
             # remove the padding
             model_output = model_input_batch[f"{phase}_output"]
             # filter out the positions where the mask is 1
@@ -144,5 +144,8 @@ class CVAE(nn.Module):
             model_output = model_output * mask
             # remove the rows where all the elements are 0. 
             model_output = model_output[model_output.sum(dim=2) != 0]
+            # check the dimension
+            if len(model_output.size()) == 2: # If the batch size is 1, add a dimension
+                model_output = model_output.unsqueeze(0)
             model_input_batch[f"{phase}_output"] = model_output
         return model_input_batch
