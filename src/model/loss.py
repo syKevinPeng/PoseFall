@@ -66,21 +66,15 @@ def vertex_loss(pred_batch, input_batch):
     return vertex_locs
 
 def compute_in_phase_loss(batch, phase_name, weight_dict):
-    if phase_name:
-        pred_batch = batch[f"{phase_name}_output"]
-        input_batch = batch[f"{phase_name}_combined_poses"]
-        mask_batch = batch[f"{phase_name}_src_key_padding_mask"]
-        mu, logvar = batch[f"{phase_name}_mu"], batch[f"{phase_name}_sigma"]
-    else:
-        pred_batch = batch["output"]
-        input_batch = batch[f"{phase_name}_combined_poses"]
-        mask_batch = batch["combined_src_key_padding_mask"]
-        mu, logvar = batch["combined_mu"], batch["combined_sigma"]
+    # if phase_name: = 
+    pred_batch = batch[f"{phase_name}_output"]
+    input_batch = batch[f"{phase_name}_combined_poses"]
+    mask_batch = batch[f"{phase_name}_src_key_padding_mask"].bool()
+    mu, logvar = batch[f"{phase_name}_mu"], batch[f"{phase_name}_sigma"]
 
-    padding = ~(mask_batch.bool().unsqueeze(-1).expand(-1, -1, pred_batch.size(-1)))
-    # remove the padding part
-    pred_batch = pred_batch * padding
-    input_batch = input_batch * padding
+    batch_size = input_batch.size(0)
+    pred_batch = pred_batch[~mask_batch]
+    input_batch = input_batch[~mask_batch]
 
     # human model param l2 loss
     human_model_loss = human_param_loss(pred_batch, input_batch)
@@ -89,9 +83,9 @@ def compute_in_phase_loss(batch, phase_name, weight_dict):
     kl_loss = kl_divergence(mu, logvar)
 
     # get the bone_rot from the input batch
-    batch_size, frame_num, feat_dim = input_batch.size()
-    bone_rot_input_batch = input_batch.reshape(batch_size, frame_num, -1, 6)[:,:, :24, :]
-    bone_rot_pred_batch = pred_batch.reshape(batch_size, frame_num, -1, 6)[:,:, :24, :]
+    all_fram_num, num_joints, feat_dim = input_batch.size()
+    bone_rot_input_batch = input_batch[:, :24, :]
+    bone_rot_pred_batch = pred_batch[:, :24, :]
     # vertex loss
     vertex_locs_loss = vertex_loss(bone_rot_pred_batch, bone_rot_input_batch)
     # loss weight

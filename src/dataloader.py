@@ -188,7 +188,7 @@ class FallingDataset1Phase(FallingDataset3Phase):
     "For single phase data loading"
 
     def __init__(
-        self, data_path,max_frame_dict, data_aug=True, sampling_every_n_frames=3
+        self, data_path,max_frame_dict, data_aug=True, sampling_every_n_frames=2
     ):
         super().__init__(data_path, data_aug, sampling_every_n_frames)
         self.phase = "combined"
@@ -200,6 +200,7 @@ class FallingDataset1Phase(FallingDataset3Phase):
         path = self.data_path[idx]
         trial_number = int(path.stem.split("_")[1])
         data = pd.read_csv(path, header=0)
+        data = data[data["phase"] != "none"]
         start_frame = randint(0, self.sampling_every_n_frames)
         data = data[start_frame :: self.sampling_every_n_frames]
 
@@ -224,7 +225,7 @@ class FallingDataset1Phase(FallingDataset3Phase):
             data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]]
             - data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]].iloc[0]
         )
-        # selec the data that contains action phase information
+
         # process armature rotation
         arm_rot = torch.tensor(data[["arm_rot_x", "arm_rot_y", "arm_rot_z"]].values)
         # euler angles to rotation matrix
@@ -238,7 +239,6 @@ class FallingDataset1Phase(FallingDataset3Phase):
         padded_arm_loc[:, :3] = arm_loc
         # extend one dim
         padded_arm_loc = padded_arm_loc.unsqueeze(1)
-        # set the starting location of the armature to be the origin
         # process bone rotation
         bone_rot = torch.tensor(
             data.loc[:, "Pelvis_x":"R_Hand_z"].values
@@ -276,7 +276,7 @@ class FallingDataset1Phase(FallingDataset3Phase):
             raise ValueError(f"src_key_padding_mask is all ones, please check")
         data_dict[
             f"{self.phase}_src_key_padding_mask"
-        ] = src_key_padding_mask  # shape(num_frames,)# Note: this the length of the actual sequence, not the padded one.
+        ] = src_key_padding_mask 
         return data_dict
 
 

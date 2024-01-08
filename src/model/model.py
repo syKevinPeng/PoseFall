@@ -43,6 +43,8 @@ class  Encoder(nn.Module):
         self,
         num_classes,
         phase_names,
+        njoints,
+        nfeats,
         input_feature_dim=150,
         latent_dim=256,
         num_att_layers=8,
@@ -55,6 +57,8 @@ class  Encoder(nn.Module):
         self.phase_names = phase_names
         self.latent_dim = latent_dim  # latent dimension
         self.num_classes = num_classes
+        self.num_joints = njoints
+        self.feat_dim = nfeats
         # transformer parameters
         self.num_heads = num_heads  # attention heads
         self.dim_feedforward = (
@@ -63,35 +67,51 @@ class  Encoder(nn.Module):
         self.dropout = dropout  # dropout rate
         self.activation = activation  # activation function
         self.num_att_layers = num_att_layers
-        self.input_feature_dim = input_feature_dim
+        self.input_feats = input_feature_dim
 
-        # motion distribution parameter tokens: used for pooling the temporal dimension
-        self.muQuery = nn.Parameter(
-            torch.randn(self.num_classes, self.latent_dim, dtype=torch.float32)
-        )
+        # # motion distribution parameter tokens: used for pooling the temporal dimension
+        # self.muQuery = nn.Parameter(
+        #     torch.randn(self.num_classes, self.latent_dim, dtype=torch.float32)
+        # )
 
-        self.sigmaQuery = nn.Parameter(
-            torch.randn(self.num_classes, self.latent_dim, dtype=torch.float32)
-        )
+        # self.sigmaQuery = nn.Parameter(
+        #     torch.randn(self.num_classes, self.latent_dim, dtype=torch.float32)
+        # )
 
-        # standard transformer encoder
-        # define one layer
-        trans_layer = nn.TransformerEncoderLayer(
-            d_model=self.latent_dim,
-            nhead=self.num_heads,
-            dim_feedforward=self.dim_feedforward,
-            dropout=self.dropout,
-            activation=self.activation,
-            # batch_first=True,
-        )
-        # define the entire encoder
-        self.seqTransEncoder = nn.TransformerEncoder(
-            trans_layer, num_layers=self.num_att_layers
-        )
+        # # standard transformer encoder
+        # # define one layer
+        # trans_layer = nn.TransformerEncoderLayer(
+        #     d_model=self.latent_dim,
+        #     nhead=self.num_heads,
+        #     dim_feedforward=self.dim_feedforward,
+        #     dropout=self.dropout,
+        #     activation=self.activation,
+        #     # batch_first=True,
+        # )
+        # # define the entire encoder
+        # self.seqTransEncoder = nn.TransformerEncoder(
+        #     trans_layer, num_layers=self.num_att_layers
+        # )
 
-        self.sequence_pos_encoder  = PositionalEncoding(latent_dim)
+        # self.sequence_pos_encoder  = PositionalEncoding(latent_dim)
 
-        self.skelEmbedding = nn.Linear(self.input_feature_dim, self.latent_dim)
+        # self.skelEmbedding = nn.Linear(self.input_feature_dim, self.latent_dim)
+        self.muQuery = nn.Parameter(torch.randn(self.num_classes, self.latent_dim))
+        self.sigmaQuery = nn.Parameter(torch.randn(self.num_classes, self.latent_dim))
+        
+        self.skelEmbedding = nn.Linear(self.input_feats, self.latent_dim)
+        
+        self.sequence_pos_encoder = PositionalEncoding(self.latent_dim, self.dropout)
+        
+        # self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
+        
+        seqTransEncoderLayer = nn.TransformerEncoderLayer(d_model=self.latent_dim,
+                                                          nhead=self.num_heads,
+                                                          dim_feedforward=self.dim_feedforward,
+                                                          dropout=self.dropout,
+                                                          activation=self.activation)
+        self.seqTransEncoder = nn.TransformerEncoder(seqTransEncoderLayer,
+                                                     num_layers=self.num_att_layers)
 
     def forward(self, batch):
         """
@@ -100,36 +120,49 @@ class  Encoder(nn.Module):
             label: Tensor, shape ``[batch_size, num_classes]``
             mask: Tensor, shape ``[batch_size, seq_len, feature_dim]``
         """
-        data, label, mask = (
-            batch[f"{self.phase_names}_combined_poses"].permute(1,0,2), # permute to frame_num, batch_size, joint_num*feat_dim
+        x, y, mask = (
+            batch[f"{self.phase_names}_combined_poses"],
             batch[f"{self.phase_names}_label"],
             batch[f"{self.phase_names }_src_key_padding_mask"].bool(), # permute to frame_num, batch_size
         )
-        batch_size = data.size(1)
-        # human poses embedding
-        x:Tensor = self.skelEmbedding(data) 
-        # add mu and sigma queries
-        # select where the label is 1
-        muQuery = torch.matmul(label, self.muQuery).unsqueeze(1).permute(1, 0, 2)
-        sigmaQuery = torch.matmul(label, self.sigmaQuery).unsqueeze(1).permute(1, 0, 2)
+        batch_size = x.size(0)
+        x = x.reshape(batch_size, -1, self.num_joints*self.feat_dim).permute(1, 0, 2)# permute to frame_num, batch_size, joint_num*feat_dim
+        # # human poses embedding
+        # x:Tensor = self.skelEmbedding(data) 
+        # # add mu and sigma queries
+        # # select where the label is 1
+        # muQuery = torch.matmul(label, self.muQuery).unsqueeze(1).permute(1, 0, 2)
+        # sigmaQuery = torch.matmul(label, self.sigmaQuery).unsqueeze(1).permute(1, 0, 2)
+        # # add mu and sigma queries to the input
+        # xseq = torch.cat((muQuery, sigmaQuery, x), dim=0) # shape: time+2, bs, latent_dim
+        # # add positional encoding
+        # encoded_xseq = self.sequence_pos_encoder(xseq)
+        # # create a bigger mask to attend to mu and sigma
+        # extra_mask = torch.zeros((batch_size, 2), dtype=bool).to(x.device)
+        # mask_seq = torch.cat((extra_mask, mask), axis=1).bool()
+        # encoder_output = self.seqTransEncoder(
+        #     encoded_xseq, src_key_padding_mask=mask_seq
+        # )
+        # # get the first two output
+        # mu = encoder_output[0]
+        # sigma = encoder_output[1]
+        # return {f"{self.phase_names}_mu": mu, f"{self.phase_names}_sigma": sigma}
+
+        x :torch.Tensor= self.skelEmbedding(x)
+        muQuery = torch.matmul(y, self.muQuery).unsqueeze(0)
+        sigmaQuery = torch.matmul(y, self.sigmaQuery).unsqueeze(0)
         # add mu and sigma queries to the input
-        xseq = torch.cat((muQuery, sigmaQuery, x), dim=0) # shape: time+2, bs, latent_dim
+        xseq = torch.cat((muQuery, sigmaQuery, x), dim=0)
         # add positional encoding
-        encoded_xseq = self.sequence_pos_encoder(xseq)
-        # create a bigger mask to attend to mu and sigma
-        extra_mask = torch.zeros((batch_size, 2), dtype=bool).to(x.device)
-        mask_seq = torch.cat((extra_mask, mask), axis=1).bool()
-        encoder_output = self.seqTransEncoder(
-            encoded_xseq, src_key_padding_mask=mask_seq
-        )
-        # get the first two output
-        mu = encoder_output[0]
-        sigma = encoder_output[1]
-        return {f"{self.phase_names}_mu": mu, f"{self.phase_names}_sigma": sigma}
-        
-        # instead of returning mu and sigma, return the entire encoder output
-        # ic(encoder_output.size())
-        # return {f"{self.phase_names}_encoder_output": encoder_output}
+        xseq = self.sequence_pos_encoder(xseq)
+        # create a bigger mask, to allow attend to mu and sigma
+        # muandsigmaMask shape: 20, 2; mask shape: 20, 60
+        muandsigmaMask = torch.zeros((batch_size, 2), dtype=bool, device=x.device)
+        maskseq = torch.cat((muandsigmaMask, mask), axis=1)
+        final = self.seqTransEncoder(xseq, src_key_padding_mask=maskseq)
+        mu = final[0]
+        logvar = final[1]
+        return {f"{self.phase_names}_mu": mu, f"{self.phase_names}_sigma": logvar}
 
 class Decoder(nn.Module):
     """
@@ -141,6 +174,8 @@ class Decoder(nn.Module):
         self,
         num_classes,
         phase_names,
+        njoints,
+        nfeats,
         input_feature_dim=150,
         latent_dim=256,
         num_heads=4,
@@ -160,8 +195,9 @@ class Decoder(nn.Module):
         self.activation = activation
         self.sequence_pos_encoder = PositionalEncoding(latent_dim)
         self.input_feats = input_feature_dim
-
-        self.action_biases = nn.Parameter(
+        self.njoints = njoints
+        self.nfeats = nfeats
+        self.actionBiases = nn.Parameter(
             torch.randn(self.num_classes, self.latent_dim)
         )
 
@@ -190,30 +226,50 @@ class Decoder(nn.Module):
         z = batch[f"{self.phase_names}_z"]
         y = batch[f"{self.phase_names}_label"]
         mask = batch[f"{self.phase_names}_src_key_padding_mask"]
+        mask = mask.bool()
         latent_dim = z.size(1)
-        batch_size, num_frames = mask.shape
-        # shift the latent noise vector to be the action noise
-        shifted_z = z + y @ self.action_biases
-        # z is sequence of size 1
-        shifted_z = shifted_z.unsqueeze(0)
-        # time queries
-        timequeries = torch.zeros(
-            num_frames, batch_size, latent_dim, device=shifted_z.device
-        )
-        # sequence encoding
-        timequeries = self.sequence_pos_encoder(timequeries)
-        # decode
-        decoder_output = self.seqTransDecoder(
-            tgt=timequeries, memory=shifted_z, tgt_key_padding_mask=mask.bool()
-        )
-        # get output sequences
-        output = self.finallayer(decoder_output).reshape(batch_size, num_frames, -1)
+        bs, nframes = mask.shape
+        # # shift the latent noise vector to be the action noise
+        # shifted_z = z + y @ self.action_biases
+        # # z is sequence of size 1
+        # shifted_z = shifted_z.unsqueeze(0)
+        # # time queries
+        # timequeries = torch.zeros(
+        #     num_frames, batch_size, latent_dim, device=shifted_z.device
+        # )
+        # # sequence encoding
+        # timequeries = self.sequence_pos_encoder(timequeries)
+        # # decode
+        # decoder_output = self.seqTransDecoder(
+        #     tgt=timequeries, memory=shifted_z, tgt_key_padding_mask=mask.bool()
+        # )
+        # # get output sequences
+        # output = self.finallayer(decoder_output).reshape(batch_size, num_frames, -1)
 
-        # setting zero for padded area
-        # expand the mask to the output size
-        # padding = mask.bool().unsqueeze(-1).expand(-1, -1, output.size(-1))
-        # output[padding] = 0
+        # # setting zero for padded area
+        # # expand the mask to the output size
+        # # padding = mask.bool().unsqueeze(-1).expand(-1, -1, output.size(-1))
+        # # output[padding] = 0
+
+        # shift the latent noise vector to be the action noise
+        shifted_z = z + y @ self.actionBiases
+        z = shifted_z[None]  # sequence of size 1
+            
+        timequeries = torch.zeros(nframes, bs, latent_dim, device=z.device)
+        
+        # only for ablation / not used in the final model
+        timequeries = self.sequence_pos_encoder(timequeries)
+        output = self.seqTransDecoder(tgt=timequeries, memory=z,
+                                      tgt_key_padding_mask=mask)
+        
+        output = self.finallayer(output).reshape(nframes, bs, self.njoints, self.nfeats)
+        
+        # zero for padded area
+        output[mask.T] = 0
+        output = output.permute(1, 0, 2, 3)
+
+        # if self.combined:
+        #     batch["output"] = output
+        # else:
         batch[f"{self.phase_names}_output"] = output
-        if self.combined:
-            batch["output"] = output
         return batch

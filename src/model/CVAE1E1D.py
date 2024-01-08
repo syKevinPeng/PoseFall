@@ -23,13 +23,12 @@ class CVAE1E1D(nn.Module):
         self.num_frames = num_classes["num_frames"]
         self.num_joints = num_classes["num_joints"]
         self.feat_dim = num_classes["feat_dim"]
-        self.encoder = Encoder(num_classes=num_classes[phase_names],phase_names="combined", latent_dim=self.latent_dim, input_feature_dim=self.num_joints*self.feat_dim )
-        self.decoder = Decoder(num_classes=num_classes[phase_names],phase_names="combined", latent_dim=self.latent_dim, input_feature_dim=self.num_joints*self.feat_dim )
+        self.encoder = Encoder(num_classes=num_classes[phase_names],phase_names="combined", latent_dim=self.latent_dim, input_feature_dim=self.num_joints*self.feat_dim, njoints=self.num_joints, nfeats=self.feat_dim)
+        self.decoder = Decoder(num_classes=num_classes[phase_names],phase_names="combined", latent_dim=self.latent_dim, input_feature_dim=self.num_joints*self.feat_dim, njoints=self.num_joints, nfeats=self.feat_dim )
 
     def forward(self, batch):
         # input size:
         self.batch_size = batch["combined_combined_poses"].size(0)
-        batch["combined_combined_poses"] = batch["combined_combined_poses"].reshape(self.batch_size, self.num_frames, self.num_joints*self.feat_dim)
         self.prepare_batch(batch)
         # Encoder:
         batch.update(self.encoder(batch))
@@ -47,16 +46,27 @@ class CVAE1E1D(nn.Module):
         """
         reparameterize the latent variable
         """
-        mu, sigma = batch[f"{phase_name}_mu"], batch[f"{phase_name}_sigma"]
-        std = torch.exp(sigma / 2)
-        if seed:
+        # mu, sigma = batch[f"{phase_name}_mu"], batch[f"{phase_name}_sigma"]
+        # std = torch.exp(sigma / 2)
+        # if seed:
+        #     generator = torch.Generator(device=self.device)
+        #     generator.manual_seed(seed)
+        #     eps = std.data.new(std.size()).normal_(generator=generator)
+        # else:
+        #     eps = std.data.new(std.size()).normal_()
+        # eps = torch.randn_like(sigma)
+        mu, logvar = batch[f"{phase_name}_mu"], batch[f"{phase_name}_sigma"]
+        std = torch.exp(logvar / 2)
+
+        if seed is None:
+            eps = std.data.new(std.size()).normal_()
+        else:
             generator = torch.Generator(device=self.device)
             generator.manual_seed(seed)
             eps = std.data.new(std.size()).normal_(generator=generator)
-        else:
-            eps = std.data.new(std.size()).normal_()
-        eps = torch.randn_like(sigma)
-        return mu + eps * sigma
+
+        z = eps.mul(std).add_(mu)
+        return z
     
     def compute_loss(self,batch):
         return compute_in_phase_loss(batch, phase_name = self.phase_names, weight_dict=self.config['loss_config'])

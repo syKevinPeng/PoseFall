@@ -106,7 +106,7 @@ if __name__ == "__main__":
     dataloaders = torch.utils.data.DataLoader(
         dataset,
         batch_size=1,
-        shuffle=True,
+        shuffle=False,
         num_workers=0,
     )
     if not Path(eval_config["output_path"]).exists():
@@ -136,6 +136,8 @@ if __name__ == "__main__":
             batch_size = input_batch["combined_label"].size(0)
         
         genreated_batch = model.generate(input_batch)
+        genreated_batch = {}
+        # genreated_batch["output"] = data_dict["combined_combined_poses"].reshape(1, 430, 156).to(DEVICE)
         if eval_config["model_type"] == "CVAE3E3D":
             whole_sequences = []
             for phase in PHASES:
@@ -164,13 +166,11 @@ if __name__ == "__main__":
             [[f"{name}_x", f"{name}_y", f"{name}_z"] for name in joint_name]
         ).flatten()
         # get the first item in the batch
-        data = torch.concatenate([arm_loc, arm_rot, bone_rot], axis=2)[0]
-        col_names = ["arm_loc_x", "arm_loc_y", "arm_loc_z"]+ ["arm_rot_x", "arm_rot_y", "arm_rot_z"]+ list(joint_name)
+        data = torch.concatenate([arm_rot, arm_loc, bone_rot], axis=2)[0]
+        col_names = ["arm_rot_x", "arm_rot_y", "arm_rot_z"] + ["arm_loc_x", "arm_loc_y", "arm_loc_z"]+ list(joint_name)
         df = pd.DataFrame(
             data=data,
-            columns=["arm_loc_x", "arm_loc_y", "arm_loc_z"]
-            + ["arm_rot_x", "arm_rot_y", "arm_rot_z"]
-            + list(joint_name),
+            columns= col_names,
         )
 
         # save the dataframe

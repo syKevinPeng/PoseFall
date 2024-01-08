@@ -1,4 +1,4 @@
-define: &exp_name "exp_7"
+define: &exp_name "exp_0"
 
 train_config:
   epochs: 1000
@@ -10,11 +10,11 @@ train_config:
   data_aug: False
 
 wandb_config:
-  wandb_mode: 'online'
+  wandb_mode: 'disabled'
   wandb_project: 'posefall'
   wandb_exp_name: *exp_name
   wandb_tags: [*train_model_type, 'train']
-  wandb_description: "CVAE: With no data aug. Pretrained weights of uestc on Encoder and decoder."
+  wandb_description: "CVAE: With no data aug. Pretrained weights of uestc on Encoder and decoder. No armature rotation"
 
 data_config:
   data_path: &data_path "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
@@ -40,7 +40,7 @@ constant:
     fall: 180
 
 eval_config:
-  ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240108_001907-6ukqfqmw/files/2024-01-08_00-19-08_exp_7/epoch_999.pth"
+  ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240108_114306-ilynabb6/files/2024-01-08_11-43-06_exp_8/epoch_399.pth"
   data_path: *data_path
   output_path: "./gen_results"
   num_to_gen: 50
