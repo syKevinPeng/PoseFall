@@ -10,7 +10,7 @@ train_config:
   data_aug: True
 
 wandb_config:
-  wandb_mode: 'online'
+  wandb_mode: 'disabled'
   wandb_project: 'posefall'
   wandb_exp_name: *exp_name
   wandb_tags: [*train_model_type, 'train']
@@ -34,6 +34,10 @@ constant:
     - 'impa'
     - 'glit'
     - 'fall'
+  max_frame_dict:
+    impa: 70
+    glit: 180
+    fall: 180
 
 eval_config:
   ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240107_180842-l21nskav/files/2024-01-07_18-08-43_exp_7/epoch_800.pth"

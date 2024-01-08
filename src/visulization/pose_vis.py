@@ -9,9 +9,6 @@ import pandas as pd
 import sys
 
 from tqdm import tqdm
-
-sys.path.append("../utils")
-from data_processing.joint_names import MOCAP_JOINT_NAMES, SMPL_JOINT_NAMES
 import smplx
 import pickle
 
@@ -32,7 +29,7 @@ from pytorch3d.renderer import (
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer.mesh import TexturesVertex
 # %%
-DATAPATH = "/home/siyuan/research/PoseFall/data/processed_data/Trial_100.csv"
+DATAPATH = "/home/siyuan/research/PoseFall/src/visulization/viz_output/CVAE_output.csv"
 VIZ_OUTPUT = "/home/siyuan/research/PoseFall/src/visulization/viz_output"
 DATAPATH = Path(DATAPATH)
 VIZ_OUTPUT = Path(VIZ_OUTPUT)
@@ -45,6 +42,7 @@ device = torch.device("cuda:0")
 
 def load_data(path=DATAPATH):
     df = pd.read_csv(path, header=0)
+    print(df.head())
     return df
 
 
@@ -161,7 +159,7 @@ def visulize_poses(dataframe):
     # ground_plane = create_ground_plane().to(device)
 
     # loop through all the frames
-    R, T = look_at_view_transform(dist=5, elev=-60, azim=0)
+    R, T = look_at_view_transform(dist=5, elev=5, azim=0)
     cameras = pytorch3d.renderer.FoVPerspectiveCameras(R=R, T=T, device=device, fov=60).to(
         device
     )
@@ -201,20 +199,17 @@ def visulize_poses(dataframe):
         rend = rend.astype("uint8")
         rends.append(rend)
 
-
+    return rends
     imageio.mimsave(VIZ_OUTPUT / "example.gif", rends, fps=20, loop=0)
 
-# %%
-# create a 360 view
-# azims = torch.linspace(0, 360, steps=36)
-# rends = []
-# for i in range(len(azims)):
-#     R, T = look_at_view_transform(dist=3.0, elev=0, azim=azims[i])
-#     cameras = pytorch3d.renderer.FoVPerspectiveCameras(
-#         R=R, T=T, device=device, fov=60
-#     ).to(device)
-#     rend = renderer(jointed_mesh, cameras=cameras, lights=lights)
-#     rend = rend.cpu().numpy()[0, ..., :3]  # (B, H, W, 4) -> (H, W, 3)
-#     # convert to uint8
-#     rend = rend * 255
-#     rends.append(rend.astype("uint8"))
+
+rends = visulize_poses(load_data())
+# evenly select 15 frames
+frame_idx = np.linspace(0, len(rends) - 1, num=15, dtype=int)
+# concate the frames into a horizontal png
+images = [rends[i] for i in frame_idx]
+images = np.concatenate(images, axis=1)
+# save the image
+imageio.imwrite(VIZ_OUTPUT / "result_original_CVAE.png", images)
+# save as gif
+imageio.mimsave(VIZ_OUTPUT / "result_original_CVAE.gif", rends, fps=20, loop=0)

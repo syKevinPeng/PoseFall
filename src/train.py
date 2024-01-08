@@ -64,7 +64,7 @@ PHASES = args["constant"]["PHASES"]
 train_config = args["train_config"]
 # data = FallingDataset(args["data_config"]["data_path"], data_aug=train_config["data_aug"])
 dataset = myFallingDataset(
-    args["data_config"]["data_path"], data_aug=train_config["data_aug"]
+    args["data_config"]["data_path"], data_aug=train_config["data_aug"], max_frame_dict=args["constant"]["max_frame_dict"]
 )
 dataloaders = torch.utils.data.DataLoader(
     dataset,
@@ -119,7 +119,7 @@ def init():
         "/home/siyuan/research/PoseFall/src/model/pretrained_models/uestc/checkpoint_1000.pth.tar"
     )
 
-    weights_to_skip = ["encoder.muQuery", "encoder.sigmaQuery", "decoder.actionBiases"]
+    weights_to_skip = ["encoder.muQuery", "encoder.sigmaQuery", "decoder.actionBiases","encoder.skelEmbedding.weight","decoder.finallayer.weight","decoder.finallayer.bias"]
     loaded_weights = {
         k: v for k, v in loaded_weights_.items() if k not in weights_to_skip
     }

@@ -144,7 +144,8 @@ if __name__ == "__main__":
         bone_rot = rotation_6d_to_matrix(parsed_seequnces["bone_rot"])
         # convert the rotation matrix to euler angle
         bone_rot = matrix_to_euler_angles(bone_rot, "XYZ")
-        bone_rot = bone_rot.reshape(batch_size, bone_rot.size(1), -1)
+        # flatten the bone rot
+        bone_rot = bone_rot.reshape(bone_rot.size(0), bone_rot.size(1), -1)
         arm_rot = rotation_6d_to_matrix(parsed_seequnces["arm_rot"])
         arm_rot = matrix_to_euler_angles(arm_rot, "XYZ")
         arm_loc = parsed_seequnces["arm_loc"]
@@ -154,14 +155,15 @@ if __name__ == "__main__":
             [[f"{name}_x", f"{name}_y", f"{name}_z"] for name in joint_name]
         ).flatten()
         # get the first item in the batch
-        print(bone_rot)
         data = torch.concatenate([arm_loc, arm_rot, bone_rot], axis=2)[0]
+        col_names = ["arm_loc_x", "arm_loc_y", "arm_loc_z"]+ ["arm_rot_x", "arm_rot_y", "arm_rot_z"]+ list(joint_name)
         df = pd.DataFrame(
             data=data,
             columns=["arm_loc_x", "arm_loc_y", "arm_loc_z"]
             + ["arm_rot_x", "arm_rot_y", "arm_rot_z"]
             + list(joint_name),
         )
+
         # save the dataframe
         df.to_csv(Path(eval_config['output_path']) / f"{idx}_sequences.csv")
         # visulization
