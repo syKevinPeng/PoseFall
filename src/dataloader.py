@@ -1,5 +1,3 @@
-import enum
-from sympy import false
 import torch
 from torch.utils.data import Dataset
 from pathlib import Path
@@ -10,9 +8,9 @@ from icecream import ic
 
 impact_phase_att = ["Impact Location", "Impact Attribute"] # full list: ["Impact Location", "Impact Attribute", "Impact Force"]
 glitch_phase_att = ["Glitch Attribute"] # full list: ["Glitch Speed", "Glitch Attribute"]
-fall_phase_att = ["Fall Attribute","End Postion"]
+fall_phase_att = ["Fall Attribute"] # full list ["Fall Attribute","End Postion"]
 
-class FallingData(Dataset):
+class FallingDataset(Dataset):
     def __init__(self, data_path, data_aug = True, sampling_rate = 60):
         if not Path(data_path).exists():
             raise FileNotFoundError(f"{data_path} does not exist")
@@ -154,10 +152,10 @@ class FallingData(Dataset):
     
 
 
-class myFallingData(FallingData):
+class myFallingDataset(FallingDataset):
     def __init__(self, data_path, data_aug = True, sampling_rate = 60):
         super().__init__(data_path, data_aug, sampling_rate)
-        self.phase = ["impa", "glit", "fall"]
+        self.phase = "combined"
         self.data_aug = data_aug
         self.sampling_rate = sampling_rate
 
@@ -173,12 +171,15 @@ class myFallingData(FallingData):
         index.sort()
         data = data.iloc[index]
 
-        data_dict ={
-            "frame_num": torch.tensor(max(data["frame"].values)),
-            "impa_label": torch.tensor(self.impact_label[self.impact_label["Trial Number"] == trial_number].iloc[:,1:].values, dtype=torch.float).flatten(),
-            "glit_label": torch.tensor(self.glitch_label[self.glitch_label["Trial Number"] == trial_number].iloc[:,1:].values, dtype=torch.float).flatten(),
-            "fall_label": torch.tensor(self.fall_label[self.fall_label["Trial Number"] == trial_number].iloc[:,1:].values, dtype=torch.float).flatten(),
+        # processing label:
+        label_col = np.concatenate([impact_phase_att, glitch_phase_att, fall_phase_att])
+        # print(f'label_col: {label_col}')
+        col_names = [att for att in self.label.columns[1:] for col in label_col if att.startswith(col)]
+        label = self.label[self.label["Trial Number"] == trial_number][col_names].values.squeeze()
+        data_dict = {
+            f"{self.phase}_label": torch.tensor(label, dtype=torch.float),
         }
+
         # set the starting location of the armature to be the origin
         data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]] = data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]] - data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]].iloc[0]
         # selec the data that contains action phase information
@@ -216,22 +217,24 @@ class myFallingData(FallingData):
         # data_dict[f"armature_rotation"] = arm_rot  # shape(num_frames, 6)
         # data_dict[f"armature_location"] = arm_loc  # shape(num_frames, 3)
         # data_dict[f"joint_rotation"] = bone_rot
-        data_dict[f"src_key_padding_mask"] = src_key_padding_mask # shape(num_frames,)# Note: this the length of the actual sequence, not the padded one.
+        data_dict[f"{self.phase}_src_key_padding_mask"] = src_key_padding_mask # shape(num_frames,)# Note: this the length of the actual sequence, not the padded one.
         combined_pose = torch.cat(
             (
                 bone_rot,
                 padded_arm_loc,
-                arm_rot.unsqueeze(1),
+                # arm_rot.unsqueeze(1),
             ),
             dim=1,
         ).float()
-        data_dict[f"combined_poses"] = combined_pose
-        return data_dict    
+        # data_dict[f"{self.phase}_combined_poses"] = combined_pose.permute(1, 2, 0).contiguous()
+        data_dict[f"{self.phase}_combined_poses"] = combined_pose
+        # return data_dict, label   
+        return data_dict
         
 
 
-# test dataset works
-data_path = "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
-dataset = myFallingData(data_path)
-# print(f'length of dataset: {len(dataset)}')
-print(dataset[0][f"combined_poses"].size())
+# # test dataset works
+# data_path = "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
+# dataset = myFallingDataset(data_path)
+# # print(f'length of dataset: {len(dataset)}')
+# print(dataset[0][f"combined_poses"].size())

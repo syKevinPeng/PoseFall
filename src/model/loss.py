@@ -1,7 +1,5 @@
 from smplx import SMPLLayer
 import torch.nn as nn
-from data_processing.utils import parse_output
-from icecream import ic
 from data_processing.utils import rotation_6d_to_matrix
 import torch
 import torch.nn.functional as F
@@ -26,9 +24,10 @@ class SMPLModel(nn.Module):
         we discard the locationa and rotation of the armature. 
         Only calculate the vertex transformation resulted from joint rotation
         """
-        parsed_output = parse_output(batch)
-        bone_rot = parsed_output["bone_rot"]
-        batch_size = bone_rot.size(0)
+        # parsed_output = parse_output(batch)
+        # bone_rot = parsed_output["bone_rot"]
+        batch_size = batch.size(0)
+        bone_rot = batch
         # convert continuous rotation representationt to rotation matrix
         bone_rot = rotation_6d_to_matrix(bone_rot)
         # body pose shape requirement: BxJx3x3
@@ -66,7 +65,7 @@ def vertex_loss(pred_batch, input_batch):
     vertex_locs = F.mse_loss(pred_vertex_locs, gt_vertex_locs, reduction="mean")
     return vertex_locs
 
-def compute_in_phase_loss(batch, phase_name, all_phases, weight_dict):
+def compute_in_phase_loss(batch, phase_name, weight_dict):
     if phase_name:
         pred_batch = batch[f"{phase_name}_output"]
         input_batch = batch[f"{phase_name}_combined_poses"]
@@ -74,11 +73,12 @@ def compute_in_phase_loss(batch, phase_name, all_phases, weight_dict):
         mu, logvar = batch[f"{phase_name}_mu"], batch[f"{phase_name}_sigma"]
     else:
         pred_batch = batch["output"]
-        input_batch = batch["combined_poses"]
+        input_batch = batch[f"{phase_name}_combined_poses"]
         mask_batch = batch["combined_src_key_padding_mask"]
         mu, logvar = batch["combined_mu"], batch["combined_sigma"]
 
     padding = ~(mask_batch.bool().unsqueeze(-1).expand(-1, -1, pred_batch.size(-1)))
+    # remove the padding part
     pred_batch = pred_batch * padding
     input_batch = input_batch * padding
 
@@ -88,8 +88,12 @@ def compute_in_phase_loss(batch, phase_name, all_phases, weight_dict):
     # KL divergence loss
     kl_loss = kl_divergence(mu, logvar)
 
+    # get the bone_rot from the input batch
+    batch_size, frame_num, feat_dim = input_batch.size()
+    bone_rot_input_batch = input_batch.reshape(batch_size, frame_num, -1, 6)[:,:, :24, :]
+    bone_rot_pred_batch = pred_batch.reshape(batch_size, frame_num, -1, 6)[:,:, :24, :]
     # vertex loss
-    vertex_locs_loss = vertex_loss(pred_batch, input_batch)
+    vertex_locs_loss = vertex_loss(bone_rot_pred_batch, bone_rot_input_batch)
     # loss weight
     loss_weight = weight_dict
     # compute loss
@@ -98,7 +102,13 @@ def compute_in_phase_loss(batch, phase_name, all_phases, weight_dict):
         + loss_weight["kl_loss_weight"] * kl_loss
         + loss_weight["vertex_loss_weight"] * vertex_locs_loss
     )
-    return total_phase_loss
+    loss_dict = {
+        "human_model_loss": (loss_weight["human_model_loss_weight"] * human_model_loss).item(),
+        "vertex_loss": (loss_weight["vertex_loss_weight"] * vertex_locs_loss).item(),
+        "kl_loss": (loss_weight["kl_loss_weight"] * kl_loss).item(),
+        "total_loss": (total_phase_loss).item(),
+     }
+    return total_phase_loss, loss_dict
 
 def compute_inter_phase_loss(phase_names,batch, loss_dict):
     """

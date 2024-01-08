@@ -2,9 +2,10 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from pathlib import Path
-from dataloader import FallingData
-from model.CVAE import CVAE
-from model.CVAE_1D import CVAE1D
+from dataloader import FallingDataset, myFallingDataset
+from model.CVAE3E3D import CVAE3E3D
+from model.CVAE3E1D import CVAE3E1D
+from model.CVAE1E1D import CVAE1E1D
 from icecream import ic
 import pandas as pd
 from data_processing.utils import (
@@ -21,9 +22,6 @@ import yaml, wandb
 # Set device
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# ckpt_path = "/home/siyuan/research/PoseFall/src/wandb/run-20231221_215107-4o2q6lod/files/2023-12-21_21-51-07_exp0/epoch_1999.p5"
-
-
 def load_ckpts(ckpt_path):
     """
     Load the checkpoint from the path
@@ -36,32 +34,6 @@ def load_ckpts(ckpt_path):
     state_dict = torch.load(ckpt_path, map_location=DEVICE)
     return state_dict
 
-
-def prepare_data(data_path):
-    # ======================== prepare data ========================
-    # data_path = "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
-    data_path = Path(data_path)
-    if not data_path.exists():
-        raise ValueError(f"Data path {data_path} does not exist")
-
-    data = FallingData(data_path)
-    dataloaders = torch.utils.data.DataLoader(
-        data,
-        batch_size=1,
-        shuffle=True,
-        num_workers=0,
-    )
-
-    # Get number of classes for each phase
-    impa_label = data[0]["impa_label"]
-    glit_label = data[0]["glit_label"]
-    fall_label = data[0]["fall_label"]
-    num_class = {
-        "impa": impa_label.size(0),
-        "glit": glit_label.size(0),
-        "fall": fall_label.size(0),
-    }
-    return dataloaders, num_class, impa_label, glit_label, fall_label
 
 
 if __name__ == "__main__":
@@ -88,42 +60,84 @@ if __name__ == "__main__":
     PHASES = args["constant"]["PHASES"]
     eval_config = args["eval_config"]
     state_dict = load_ckpts(eval_config["ckpt_path"])
-    dataloaders, num_class, impa_label, glit_label, fall_label = prepare_data(
-        eval_config["data_path"]
+    # ======================== prepare data ========================
+    data_path = Path(eval_config["data_path"])
+    if not data_path.exists():
+        raise ValueError(f"Data path {data_path} does not exist")
+
+    dataset = myFallingDataset(data_path)
+    dataloaders = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=1,
+        shuffle=True,
+        num_workers=0,
     )
+
+    if "combined_label" in dataset[0].keys():
+        num_class = {"combined": dataset[0]["combined_label"].size(0)}
+        print(f"Number of classes: {num_class}")
+        num_frames, num_joints, feat_dim = dataset[0]["combined_combined_poses"].size()
+        num_class.update(
+            {"num_frames": num_frames, "num_joints": num_joints, "feat_dim": feat_dim}
+        )
+        input_type = "combined"
+    else:
+        # Get number of classes for each phase
+        impa_label = dataset[0]["impa_label"]
+        glit_label = dataset[0]["glit_label"]
+        fall_label = dataset[0]["fall_label"]
+        num_class = {
+            "impa": impa_label.size(0),
+            "glit": glit_label.size(0),
+            "fall": fall_label.size(0),
+        }
+        input_type  = "seperated"
     if not Path(eval_config["output_path"]).exists():
         print(f"Output path {eval_config['output_path']} does not exist... Creating it")
         Path(eval_config["output_path"]).mkdir(parents=True, exist_ok=True)
     # ======================== actual evaluation pipeline ========================
     # Initialize model and optimizer
-    if eval_config["model_type"] == "CVAE":
-        model = CVAE(num_classes_dict=num_class, config = args).to(DEVICE)
-    elif eval_config["model_type"] == "CVAE_1D":
-        model = CVAE1D(num_classes_dict=num_class, config = args).to(DEVICE)
+    if eval_config["model_type"] == "CVAE3E3D":
+        model = CVAE3E3D(num_classes_dict=num_class, config=args).to(DEVICE)
+    elif eval_config["model_type"] == "CVAE3E1D":
+        model = CVAE3E1D(num_classes_dict=num_class, config=args).to(DEVICE)
+    elif eval_config["model_type"] == "CVAE1E1D":
+        model = CVAE1E1D(num_classes=num_class, config=args).to(DEVICE)
+    else:
+        raise ValueError(f"Model type {eval_config['model_type']} not supported")
     model.load_state_dict(state_dict)
     model.eval()
 
     for idx, data_dict in enumerate(tqdm(dataloaders)):
-        input_batch = {
-            "impa_label": data_dict["impa_label"].to(DEVICE),
-            "glit_label": data_dict["glit_label"].to(DEVICE),
-            "fall_label": data_dict["fall_label"].to(DEVICE),
-            "impa_mask": data_dict["impa_src_key_padding_mask"].to(DEVICE),
-            "glit_mask": data_dict["glit_src_key_padding_mask"].to(DEVICE),
-            "fall_mask": data_dict["fall_src_key_padding_mask"].to(DEVICE),
-        }
+        if input_type == "seperated":
+            input_batch = {
+                "impa_label": data_dict["impa_label"].to(DEVICE),
+                "glit_label": data_dict["glit_label"].to(DEVICE),
+                "fall_label": data_dict["fall_label"].to(DEVICE),
+                "impa_mask": data_dict["impa_src_key_padding_mask"].to(DEVICE),
+                "glit_mask": data_dict["glit_src_key_padding_mask"].to(DEVICE),
+                "fall_mask": data_dict["fall_src_key_padding_mask"].to(DEVICE),
+            }
+            batch_size = input_batch["impa_label"].size(0)
+        elif input_type == "combined":
+            input_batch = {
+                "combined_label": data_dict["combined_label"].to(DEVICE),
+                "combined_mask": data_dict["combined_src_key_padding_mask"].to(DEVICE),
+            }
+            batch_size = input_batch["combined_label"].size(0)
+        
         genreated_batch = model.generate(input_batch)
-        batch_size = input_batch["impa_label"].size(0)
-        if eval_config["model_type"] == "CVAE":
+        if eval_config["model_type"] == "CVAE3E3D":
             whole_sequences = []
             for phase in PHASES:
                 model_output = genreated_batch[f"{phase}_output"]
                 model_output = model_output.cpu().detach()
                 whole_sequences.append(model_output)
             whole_sequences = torch.concat(whole_sequences, axis=1)
-        elif eval_config["model_type"] == "CVAE_1D":
+        elif eval_config["model_type"] == "CVAE3E1D" or eval_config["model_type"] == "CVAE1E1D":
             whole_sequences = genreated_batch["output"]
             whole_sequences = whole_sequences.cpu().detach()
+
         # parse the output
         parsed_seequnces = parse_output(whole_sequences)
         # convert the rotation to rotation matrix
@@ -140,6 +154,7 @@ if __name__ == "__main__":
             [[f"{name}_x", f"{name}_y", f"{name}_z"] for name in joint_name]
         ).flatten()
         # get the first item in the batch
+        print(bone_rot)
         data = torch.concatenate([arm_loc, arm_rot, bone_rot], axis=2)[0]
         df = pd.DataFrame(
             data=data,

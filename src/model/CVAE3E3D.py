@@ -9,10 +9,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .loss import *
 from icecream import ic
-from model.model import Encoder, Decoder
+from .model import Encoder, Decoder
 import wandb, scipy
 
-class CVAE(nn.Module):
+class CVAE3E3D(nn.Module):
     """
     CVAE model with three decoder and three encoders.
     """
@@ -27,7 +27,7 @@ class CVAE(nn.Module):
             setattr(
                 self,
                 f"{phase}_encoder",
-                Encoder(num_classes=num_classes_dict[phase], phase_names=phase, latent_dim=self.latent_dim),
+                 Encoder(num_classes=num_classes_dict[phase], phase_names=phase, latent_dim=self.latent_dim),
             )
             setattr(
                 self,

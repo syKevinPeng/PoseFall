@@ -10,11 +10,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .loss import *
 from icecream import ic
-from model.model import Encoder, Decoder
+from .model import Encoder, Decoder
 import wandb, scipy
-from .CVAE import CVAE
+from .CVAE3E3D import CVAE3E3D
 
-class CVAE1D(CVAE):
+class CVAE3E1D(CVAE3E3D):
     """
     CVAE model with three encoder and one decoders. 
     """

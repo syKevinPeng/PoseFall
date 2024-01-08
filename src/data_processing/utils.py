@@ -195,10 +195,25 @@ def parse_output(sequences):
     @param sequences: Tensor, shape (batch_size, seq_len, feature_dim=153 )
     @return: dict, keys are arm_rot, arm_loc, bone_rot
     """
-    batch_size, seq_len, feature_dim = sequences.shape
-    arm_rot = sequences[:, :, :6]
-    arm_loc = sequences[:, :, 6:9]
-    bone_rot = sequences[:, :, 9:].reshape(batch_size,-1, 24, 6)
+    batch_size, seq_len, feature_dim = sequences.size()
+    sequences = sequences.reshape(batch_size, seq_len, -1, 6)
+    num_joints = sequences.size(2)
+    print(f'num_joints: {num_joints}')
+    if num_joints == 25: 
+        # meanning bone rots + body locs
+        arm_loc = sequences[:, :, -1, :][:3]
+        bone_rot = sequences[:, :, :-1, :]
+        arm_rot = torch.zeros(batch_size, seq_len, 3, 6)
+    elif num_joints == 24:
+        # meanning bone rots only
+        arm_loc = torch.zeros(batch_size, seq_len, 3)
+        bone_rot = sequences
+        arm_rot = torch.zeros(batch_size, seq_len, 3, 6)
+    elif num_joints == 26:
+        # meanning bone rots + body locs + arm rots
+        arm_loc = sequences[:, :, -2, :][:3]
+        bone_rot = sequences[:, :, :-2, :]
+        arm_rot = sequences[:, :, -1, :]
 
     return {'arm_rot': arm_rot, 'arm_loc': arm_loc, 'bone_rot': bone_rot}
 

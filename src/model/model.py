@@ -9,31 +9,31 @@ import torch.nn.functional as F
 from torch import nn, Tensor
 import numpy as np
 from icecream import ic
-
+torch.manual_seed(0)
 
 # standard transformer Positional encoding from https://pytorch.org/tutorials/beginner/transformer_tutorial.html
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
-        super().__init__()
+    def __init__(self, d_model, dropout=0.1, max_len=5000):
+        super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
-        position = torch.arange(max_len).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2) * (-np.log(10000.0) / d_model))
-        pe = torch.zeros(max_len, 1, d_model)
-        pe[:, 0, 0::2] = torch.sin(position * div_term)
-        pe[:, 0, 1::2] = torch.cos(position * div_term)
-        self.register_buffer("pe", pe)
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1)
+        
+        self.register_buffer('pe', pe)
 
-    def forward(self, x: Tensor) -> Tensor:
-        """
-        Arguments:
-            x: Tensor, shape ``[seq_len, batch_size, embedding_dim]``
-        """
-        x = x + self.pe[: x.size(0)]
-        return self.dropout(x)
+    def forward(self, x):
+        # not used in the final model
+        x = x + self.pe[:x.shape[0], :]
+        x = self.dropout(x)
+        return x
 
 
-class Encoder(nn.Module):
+class  Encoder(nn.Module):
     """
     Encoder for the transformer model
     modified from https://github.com/Mathux/ACTOR/blob/master/src/models/architectures/transformer.py
@@ -43,7 +43,7 @@ class Encoder(nn.Module):
         self,
         num_classes,
         phase_names,
-        input_feature_dim=153,
+        input_feature_dim=150,
         latent_dim=256,
         num_att_layers=8,
         num_heads=4,
@@ -82,7 +82,7 @@ class Encoder(nn.Module):
             dim_feedforward=self.dim_feedforward,
             dropout=self.dropout,
             activation=self.activation,
-            batch_first=True,
+            # batch_first=True,
         )
         # define the entire encoder
         self.seqTransEncoder = nn.TransformerEncoder(
@@ -101,32 +101,30 @@ class Encoder(nn.Module):
             mask: Tensor, shape ``[batch_size, seq_len, feature_dim]``
         """
         data, label, mask = (
-            batch[f"{self.phase_names}_combined_poses"],
+            batch[f"{self.phase_names}_combined_poses"].permute(1,0,2), # permute to frame_num, batch_size, joint_num*feat_dim
             batch[f"{self.phase_names}_label"],
-            batch[f"{self.phase_names }_src_key_padding_mask"],
+            batch[f"{self.phase_names }_src_key_padding_mask"].bool(), # permute to frame_num, batch_size
         )
-        batch_size = data.size(0)
+        batch_size = data.size(1)
         # human poses embedding
-        x = self.skelEmbedding(data)
-
+        x:Tensor = self.skelEmbedding(data) 
         # add mu and sigma queries
         # select where the label is 1
-        muQuery = torch.matmul(label, self.muQuery).unsqueeze(1)
-        sigmaQuery = torch.matmul(label, self.sigmaQuery).unsqueeze(1)
+        muQuery = torch.matmul(label, self.muQuery).unsqueeze(1).permute(1, 0, 2)
+        sigmaQuery = torch.matmul(label, self.sigmaQuery).unsqueeze(1).permute(1, 0, 2)
         # add mu and sigma queries to the input
-        xseq = torch.cat((muQuery, sigmaQuery, x), dim=1)
+        xseq = torch.cat((muQuery, sigmaQuery, x), dim=0) # shape: time+2, bs, latent_dim
         # add positional encoding
-        encoded_xseq = self.sequence_pos_encoder (xseq)
-
+        encoded_xseq = self.sequence_pos_encoder(xseq)
         # create a bigger mask to attend to mu and sigma
-        extra_mask = torch.zeros((batch_size, 2)).to(mask.device)
-        mask_seq = torch.cat((extra_mask, mask), dim=1)
+        extra_mask = torch.zeros((batch_size, 2), dtype=bool).to(x.device)
+        mask_seq = torch.cat((extra_mask, mask), axis=1).bool()
         encoder_output = self.seqTransEncoder(
             encoded_xseq, src_key_padding_mask=mask_seq
         )
         # get the first two output
-        mu = encoder_output[:, 0, :]
-        sigma = encoder_output[:, 1, :]
+        mu = encoder_output[0]
+        sigma = encoder_output[1]
         return {f"{self.phase_names}_mu": mu, f"{self.phase_names}_sigma": sigma}
         
         # instead of returning mu and sigma, return the entire encoder output
@@ -143,7 +141,7 @@ class Decoder(nn.Module):
         self,
         num_classes,
         phase_names,
-        input_feature_dim=153,
+        input_feature_dim=150,
         latent_dim=256,
         num_heads=4,
         dim_feedforward=1024,
@@ -160,7 +158,7 @@ class Decoder(nn.Module):
         self.num_layers = num_layers
         self.dropout = dropout
         self.activation = activation
-        self.pos_encoder = PositionalEncoding(latent_dim)
+        self.sequence_pos_encoder = PositionalEncoding(latent_dim)
         self.input_feats = input_feature_dim
 
         self.action_biases = nn.Parameter(
@@ -173,13 +171,12 @@ class Decoder(nn.Module):
             dim_feedforward=self.dim_feedforward,
             dropout=self.dropout,
             activation=self.activation,
-            batch_first=True,
         )
 
         self.seqTransDecoder = nn.TransformerDecoder(
             self.seqTransDecoderLayer , num_layers=self.num_layers
         )
-        self.final_layer = nn.Linear(in_features=self.latent_dim, out_features=self.input_feats)
+        self.finallayer = nn.Linear(in_features=self.latent_dim, out_features=self.input_feats)
         if self.phase_names == "combined":
             self.combined = True
         else:
@@ -187,7 +184,7 @@ class Decoder(nn.Module):
 
     def forward(self, batch):
         if self.combined:
-            z = batch["z"]
+            z = batch["combined_z"]
             y = batch["combined_label"]
             mask = batch["combined_src_key_padding_mask"]
         z = batch[f"{self.phase_names}_z"]
@@ -198,19 +195,19 @@ class Decoder(nn.Module):
         # shift the latent noise vector to be the action noise
         shifted_z = z + y @ self.action_biases
         # z is sequence of size 1
-        shifted_z = shifted_z.unsqueeze(1)
+        shifted_z = shifted_z.unsqueeze(0)
         # time queries
         timequeries = torch.zeros(
-            batch_size, num_frames, latent_dim, device=shifted_z.device
+            num_frames, batch_size, latent_dim, device=shifted_z.device
         )
         # sequence encoding
-        timequeries = self.pos_encoder(timequeries)
+        timequeries = self.sequence_pos_encoder(timequeries)
         # decode
         decoder_output = self.seqTransDecoder(
             tgt=timequeries, memory=shifted_z, tgt_key_padding_mask=mask.bool()
         )
         # get output sequences
-        output = self.final_layer(decoder_output).reshape(batch_size, num_frames, -1)
+        output = self.finallayer(decoder_output).reshape(batch_size, num_frames, -1)
 
         # setting zero for padded area
         # expand the mask to the output size

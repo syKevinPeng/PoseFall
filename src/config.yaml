@@ -1,20 +1,20 @@
 define: &exp_name "exp_7"
 
 train_config:
-  epochs: 200
-  batch_size: 8
-  model_type: &train_model_type 'CVAE'
+  epochs: 1000
+  batch_size: 20
+  model_type: &train_model_type 'CVAE1E1D' # options CVAE3E1D, CVAE3E1D
   lr: 0.0001
   num_workers: 4
-  model_save_freq: 10
+  model_save_freq: 200
   data_aug: True
 
 wandb_config:
   wandb_mode: 'online'
   wandb_project: 'posefall'
   wandb_exp_name: *exp_name
-  wandb_tags: [*train_model_type, 'train', 'data_aug']
-  wandb_description: "CVAE: With data aug. Pretrained weights of uestc on Encoder and decoder."
+  wandb_tags: [*train_model_type, 'train']
+  wandb_description: "CVAE: With no data aug. Pretrained weights of uestc on Encoder and decoder."
 
 data_config:
   data_path: &data_path "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
@@ -24,8 +24,8 @@ data_config:
 
 loss_config:
   human_model_loss_weight: 1
-  vertex_loss_weight: 2
-  kl_loss_weight: 0.0001
+  vertex_loss_weight: 1
+  kl_loss_weight: 0.00001
   loc_loss_weight: 0
   var_loss_weight: 0
 
@@ -36,14 +36,14 @@ constant:
     - 'fall'
 
 eval_config:
-  ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240102_195306-iw16kkb4/files/2024-01-02_19-53-06_exp_7/epoch_160.pth"
+  ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240107_180842-l21nskav/files/2024-01-07_18-08-43_exp_7/epoch_800.pth"
   data_path: *data_path
   output_path: "./gen_results"
   num_to_gen: 50
-  model_type: &eval_model_type 'CVAE'
+  model_type: &eval_model_type 'CVAE1E1D'
   wandb_config:
     wandb_mode: 'disabled'
     wandb_project: 'posefall'
     wandb_exp_name: *exp_name
     wandb_tags: [*eval_model_type, 'eval']
-    wandb_description:  "CVAE: With data aug. Pretrained weights on Encoder and decoder."
+    wandb_description:  "Vanilla CVAE: With no data aug. Pretrained weights of uestc on Encoder and decoder."
