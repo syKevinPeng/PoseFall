@@ -161,7 +161,7 @@ def cmp_d(l1: "list[tuple[str, Any]]", l2: "list[tuple[str, Any]]") -> None:
             assert np.allclose(v1, v2), f"{k} is not equal as ndarray"
         else:
             assert v1 == v2, f"{k} is not equal!"
-        print(f"\t>>>\tPASS: {k}")
+        print(f"\t>>>\tPASS   : {k}")
 
 
 def compare_dict_of_tensors(
