@@ -212,7 +212,7 @@ def parse_output(sequences):
         arm_rot = torch.zeros(batch_size, seq_len, 6)
     elif num_joints == 26:
         # meanning bone rots + body locs + arm rots
-        arm_loc = sequences[:, :, -2, :][:3]
+        arm_loc = sequences[:, :, -2, :3]
         bone_rot = sequences[:, :, :-2, :]
         arm_rot = sequences[:, :, -1, :]
 

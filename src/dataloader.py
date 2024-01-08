@@ -17,7 +17,10 @@ glitch_phase_att = [
 fall_phase_att = ["Fall Attribute"]  # full list ["Fall Attribute","End Postion"]
 
 
-class FallingDataset(Dataset):
+class FallingDataset3Phase(Dataset):
+    """
+    For three phase data loading 
+    """
     def __init__(
         self, data_path, data_aug=True, sampling_every_n_frames=60, max_frame_dict={}
     ):
@@ -63,21 +66,11 @@ class FallingDataset(Dataset):
         path = self.data_path[idx]
         trial_number = int(path.stem.split("_")[1])
         data = pd.read_csv(path, header=0)
-        # sample 60 frames from all the index. Add a small random number to avoid sampling the same frame
-        index = np.linspace(10, len(data) - 10, num=60, dtype=int)
-        random_shift = np.random.randint(-5, 5, size=60)
-        index = index + random_shift
-        # sort the index just in case
-        index.sort()
-        data = data.iloc[index]
+        # randomly select a start frame
+        start_frame = randint(0, self.sampling_every_n_frames)
+        data = data[start_frame :: self.sampling_every_n_frames]
 
-        # col_name =  data.columns[1:-1].to_numpy()
-        # col_name = col_name.reshape(-1, 3)[2:, :]
-        # print(col_name.shape)
-
-        # exit()
         data_dict = {
-            "frame_num": torch.tensor(max(data["frame"].values)),
             "impa_label": torch.tensor(
                 self.impact_label[self.impact_label["Trial Number"] == trial_number]
                 .iloc[:, 1:]
@@ -141,7 +134,10 @@ class FallingDataset(Dataset):
             arm_loc = torch.tensor(
                 phase_data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]].values
             )
-            # set the starting location of the armature to be the origin
+            padded_arm_loc = torch.zeros((len(arm_loc), 6))
+            padded_arm_loc[:, :3] = arm_loc
+             # extend one dim
+            padded_arm_loc = padded_arm_loc.unsqueeze(1)
             # process bone rotation
             bone_rot = torch.tensor(
                 phase_data.loc[:, "Pelvis_x":"R_Hand_z"].values
@@ -149,23 +145,29 @@ class FallingDataset(Dataset):
             bone_rot = bone_rot.reshape(-1, 24, 3)
             bone_rot = euler_angles_to_matrix(bone_rot, "XYZ")
             bone_rot = matrix_to_rotation_6d(bone_rot)
-
-            # # pad the data to max frame length if the frame length is less than max frame length
-            # pad_length = self.max_frame[phase] - frame_length
-            # if pad_length < 0:
-            #     raise ValueError(
-            #         f"{phase} frame length {frame_length} is greater than max frame length {self.max_frame[phase]}"
-            #     )
-            # arm_rot = torch.cat((arm_rot, torch.zeros((pad_length, 6))))
-            # arm_loc = torch.cat((arm_loc, torch.zeros((pad_length, 3))))
-            # bone_rot = torch.cat((bone_rot, torch.zeros((pad_length, 24, 6))))
-
-            # # prepare padding mask for the data: attend zero position and ignore none-zeros
-            # # TODO: simplify the padding mask
-            # src_key_padding_mask = torch.cat(
-            #     (torch.zeros((frame_length)), torch.ones((pad_length)))
-            # )
-            src_key_padding_mask = torch.zeros((frame_length))
+            combined_pose = torch.cat(
+            (
+                bone_rot,
+                padded_arm_loc,
+                arm_rot.unsqueeze(1),
+            ),
+            dim=1,
+            ).float()
+            curr_frame_length, num_of_joints, feat_dim = combined_pose.size()
+            max_frame = self.max_frame[phase]
+            pad_length = max_frame - curr_frame_length
+            if pad_length < 0:
+                raise ValueError(
+                    f"frame length {curr_frame_length} is greater than max frame length {max_frame}"
+                )
+            # pad the data to max frame length if the frame length is less than max frame length
+            padded_combined_pose = torch.cat(
+                (combined_pose, torch.zeros((pad_length, num_of_joints, feat_dim)))
+            )
+            data_dict[f"{self.phase}_combined_poses"] = padded_combined_pose
+            src_key_padding_mask = torch.concat(
+            [torch.zeros(curr_frame_length), torch.ones(pad_length)]
+            )
 
             # sanity check if the padding mask are not all ones
             if torch.all(src_key_padding_mask == 1):
@@ -175,36 +177,18 @@ class FallingDataset(Dataset):
                 raise ValueError(
                     f"{phase} src_key_padding_mask is all ones, please check"
                 )
-            data_dict[f"{phase}_armature_rotation"] = arm_rot  # shape(num_frames, 6)
-            data_dict[f"{phase}_armature_location"] = arm_loc  # shape(num_frames, 3)
-            data_dict[f"{phase}_joint_rotation"] = bone_rot.reshape(
-                self.max_frame[phase], -1
-            )  # shape(num_frames, 24,6) => shape(num_frames, 144)
-
-            data_dict[
-                f"{phase}_src_key_padding_mask"
-            ] = src_key_padding_mask  # shape(num_frames,)
-            data_dict[f"{phase}_lengths"] = torch.tensor(
-                frame_length
-            )  # Note: this the length of the actual sequence, not the padded one.
-            combined_pose = torch.cat(
-                (
-                    data_dict[f"{phase}_armature_location"],
-                    data_dict[f"{phase}_armature_rotation"],
-                    data_dict[f"{phase}_joint_rotation"],
-                ),
-                dim=1,
-            ).float()
-            data_dict[f"{phase}_combined_poses"] = combined_pose
+            if torch.all(src_key_padding_mask == 1):
+                raise ValueError(f"src_key_padding_mask is all ones, please check")
+            data_dict[f"{self.phase}_src_key_padding_mask"] = src_key_padding_mask 
 
         return data_dict
 
 
-class myFallingDataset(FallingDataset):
+class FallingDataset1Phase(FallingDataset3Phase):
     "For single phase data loading"
 
     def __init__(
-        self, data_path, data_aug=True, sampling_every_n_frames=3, max_frame_dict={}
+        self, data_path,max_frame_dict, data_aug=True, sampling_every_n_frames=3
     ):
         super().__init__(data_path, data_aug, sampling_every_n_frames)
         self.phase = "combined"

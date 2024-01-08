@@ -7,7 +7,7 @@ torch.manual_seed(0)
 
 import torch.nn as nn
 import torch.nn.functional as F
-from dataloader import FallingDataset, myFallingDataset
+from dataloader import FallingDataset3Phase, FallingDataset1Phase
 from model.CVAE3E3D import CVAE3E3D
 from model.CVAE3E1D import CVAE3E1D
 from model.CVAE1E1D import CVAE1E1D
@@ -63,7 +63,7 @@ ckpt_path.mkdir(parents=True, exist_ok=True)
 PHASES = args["constant"]["PHASES"]
 train_config = args["train_config"]
 # data = FallingDataset(args["data_config"]["data_path"], data_aug=train_config["data_aug"])
-dataset = myFallingDataset(
+dataset = FallingDataset1Phase(
     args["data_config"]["data_path"], data_aug=train_config["data_aug"], max_frame_dict=args["constant"]["max_frame_dict"]
 )
 dataloaders = torch.utils.data.DataLoader(

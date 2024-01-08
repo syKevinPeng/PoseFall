@@ -34,3 +34,4 @@ pretrained_weights = {}
 pretrained_weights.update(load_weights(encoder_key, weight))
 pretrained_weights.update(load_weights(decoder_key, weight))
 model.load_state_dict(pretrained_weights, strict=False)
+

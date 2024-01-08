@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from pathlib import Path
-from dataloader import FallingDataset, myFallingDataset
+from dataloader import FallingDataset3Phase, FallingDataset1Phase
 from model.CVAE3E3D import CVAE3E3D
 from model.CVAE3E1D import CVAE3E1D
 from model.CVAE1E1D import CVAE1E1D
@@ -33,6 +33,43 @@ def load_ckpts(ckpt_path):
     # load checkpoint
     state_dict = torch.load(ckpt_path, map_location=DEVICE)
     return state_dict
+
+def get_model(model_type, num_class):
+    """
+    Get the model based on the config
+    """
+    if model_type == "CVAE3E3D":
+        model = CVAE3E3D(num_classes_dict=num_class, config=args).to(DEVICE)
+    elif model_type == "CVAE3E1D":
+        model = CVAE3E1D(num_classes_dict=num_class, config=args).to(DEVICE)
+    elif model_type == "CVAE1E1D":
+        model = CVAE1E1D(num_classes=num_class, config=args).to(DEVICE)
+    else:
+        raise ValueError(f"Model type {model_type} not supported")
+    return model
+
+def prepare_input_instance(data_instance):
+    if "combined_label" in data_instance.keys():
+        num_class = {"combined": data_instance["combined_label"].size(0)}
+        print(f"Number of classes: {num_class}")
+        num_frames, num_joints, feat_dim = data_instance["combined_combined_poses"].size()
+        num_class.update(
+            {"num_frames": num_frames, "num_joints": num_joints, "feat_dim": feat_dim}
+        )
+        input_type = "combined"
+    else:
+        # Get number of classes for each phase
+        impa_label = data_instance["impa_label"]
+        glit_label = data_instance["glit_label"]
+        fall_label = data_instance["fall_label"]
+        num_class = {
+            "impa": impa_label.size(0),
+            "glit": glit_label.size(0),
+            "fall": fall_label.size(0),
+        }
+        input_type  = "seperated"
+
+    return num_class, input_type
 
 
 
@@ -65,47 +102,19 @@ if __name__ == "__main__":
     if not data_path.exists():
         raise ValueError(f"Data path {data_path} does not exist")
 
-    dataset = myFallingDataset(data_path)
+    dataset = FallingDataset1Phase(data_path, max_frame_dict=args["constant"]["max_frame_dict"])
     dataloaders = torch.utils.data.DataLoader(
         dataset,
         batch_size=1,
         shuffle=True,
         num_workers=0,
     )
-
-    if "combined_label" in dataset[0].keys():
-        num_class = {"combined": dataset[0]["combined_label"].size(0)}
-        print(f"Number of classes: {num_class}")
-        num_frames, num_joints, feat_dim = dataset[0]["combined_combined_poses"].size()
-        num_class.update(
-            {"num_frames": num_frames, "num_joints": num_joints, "feat_dim": feat_dim}
-        )
-        input_type = "combined"
-    else:
-        # Get number of classes for each phase
-        impa_label = dataset[0]["impa_label"]
-        glit_label = dataset[0]["glit_label"]
-        fall_label = dataset[0]["fall_label"]
-        num_class = {
-            "impa": impa_label.size(0),
-            "glit": glit_label.size(0),
-            "fall": fall_label.size(0),
-        }
-        input_type  = "seperated"
     if not Path(eval_config["output_path"]).exists():
         print(f"Output path {eval_config['output_path']} does not exist... Creating it")
         Path(eval_config["output_path"]).mkdir(parents=True, exist_ok=True)
-    # ======================== actual evaluation pipeline ========================
-    # Initialize model and optimizer
-    if eval_config["model_type"] == "CVAE3E3D":
-        model = CVAE3E3D(num_classes_dict=num_class, config=args).to(DEVICE)
-    elif eval_config["model_type"] == "CVAE3E1D":
-        model = CVAE3E1D(num_classes_dict=num_class, config=args).to(DEVICE)
-    elif eval_config["model_type"] == "CVAE1E1D":
-        model = CVAE1E1D(num_classes=num_class, config=args).to(DEVICE)
-    else:
-        raise ValueError(f"Model type {eval_config['model_type']} not supported")
-    model.load_state_dict(state_dict)
+    # ======================== prepare model ========================
+    num_class, input_type=prepare_input_instance(dataset[0])
+    model = get_model(eval_config["model_type"], num_class=num_class)
     model.eval()
 
     for idx, data_dict in enumerate(tqdm(dataloaders)):
