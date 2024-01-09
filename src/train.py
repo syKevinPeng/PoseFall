@@ -69,7 +69,7 @@ dataset = FallingDataset1Phase(
 dataloaders = torch.utils.data.DataLoader(
     dataset,
     batch_size=train_config["batch_size"],
-    shuffle=False,
+    shuffle=True,
     num_workers=train_config["num_workers"],
 )
 if "combined_label" in dataset[0].keys():
@@ -104,11 +104,7 @@ def init():
         model = CVAE1E1D(num_classes=num_class, config=args).to(DEVICE)
     else:
         raise ValueError(f"Model type {train_config['model_type']} not supported")
-    optimizer = torch.optim.Adam(model.parameters(), lr=train_config["lr"])
-
-    # get model weight name
-    # model_weight_name = model.state_dict().keys()
-    # print(f"Model weight name: {model_weight_name}") #fall_decoder.seqTransDecoder
+    optimizer = torch.optim.AdamW(model.parameters(), lr=train_config["lr"])
 
     # load pretrained model
     pretrained_weights = Path(args["data_config"]["pretrained_weights"])

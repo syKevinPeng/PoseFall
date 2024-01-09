@@ -115,6 +115,7 @@ if __name__ == "__main__":
     # ======================== prepare model ========================
     num_class, input_type=prepare_input_instance(dataset[0])
     model = get_model(eval_config["model_type"], num_class=num_class)
+    model.load_state_dict(state_dict)
     model.eval()
 
     for idx, data_dict in enumerate(tqdm(dataloaders)):
@@ -136,7 +137,6 @@ if __name__ == "__main__":
             batch_size = input_batch["combined_label"].size(0)
         
         genreated_batch = model.generate(input_batch)
-        genreated_batch = {}
         # genreated_batch["output"] = data_dict["combined_combined_poses"].reshape(1, 430, 156).to(DEVICE)
         if eval_config["model_type"] == "CVAE3E3D":
             whole_sequences = []
@@ -146,7 +146,7 @@ if __name__ == "__main__":
                 whole_sequences.append(model_output)
             whole_sequences = torch.concat(whole_sequences, axis=1)
         elif eval_config["model_type"] == "CVAE3E1D" or eval_config["model_type"] == "CVAE1E1D":
-            whole_sequences = genreated_batch["output"]
+            whole_sequences = genreated_batch["combined_output"]
             whole_sequences = whole_sequences.cpu().detach()
 
         # parse the output

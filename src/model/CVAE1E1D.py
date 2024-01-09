@@ -84,3 +84,72 @@ class CVAE1E1D(nn.Module):
         input_batch["combined_z"] = z
         batch.update(self.decoder(input_batch))
         return batch
+    def _generate(self, batch, nspa=1,
+                 noise_same_action="random", noise_diff_action="random",
+                 fact=1):
+        if nspa is None:
+            nspa = 1
+        batch_size = batch["combined_label"].size(0)
+        if batch_size != 1:
+            raise Exception("batch size must be 1")
+        classes = batch["combined_label"]
+        mask = batch["combined_mask"]
+        mask = 1-mask
+        durations = mask.sum(dim=1).int()
+        # cast to int
+        nats = len(classes)
+        # y = classes.to(self.device).repeat(nspa)  # (view(nspa, nats))
+        y = classes.to(self.device) 
+
+        if len(durations.shape) == 1:
+            lengths = durations.to(self.device).repeat(nspa)
+        else:
+            lengths = durations.to(self.device).reshape(y.shape)
+        
+        mask = self.lengths_to_mask(lengths)
+        if noise_same_action == "random":
+            if noise_diff_action == "random":
+                # here
+                z = torch.randn(nspa*nats, self.latent_dim, device=self.device)
+            elif noise_diff_action == "same":
+                z_same_action = torch.randn(nspa, self.latent_dim, device=self.device)
+                z = z_same_action.repeat_interleave(nats, axis=0)
+            else:
+                raise NotImplementedError("Noise diff action must be random or same.")
+        elif noise_same_action == "interpolate":
+            if noise_diff_action == "random":
+                z_diff_action = torch.randn(nats, self.latent_dim, device=self.device)
+            elif noise_diff_action == "same":
+                z_diff_action = torch.randn(1, self.latent_dim, device=self.device).repeat(nats, 1)
+            else:
+                raise NotImplementedError("Noise diff action must be random or same.")
+            interpolation_factors = torch.linspace(-1, 1, nspa, device=self.device)
+            z = torch.einsum("ij,k->kij", z_diff_action, interpolation_factors).view(nspa*nats, -1)
+        elif noise_same_action == "same":
+            if noise_diff_action == "random":
+                z_diff_action = torch.randn(nats, self.latent_dim, device=self.device)
+            elif noise_diff_action == "same":
+                z_diff_action = torch.randn(1, self.latent_dim, device=self.device).repeat(nats, 1)
+            else:
+                raise NotImplementedError("Noise diff action must be random or same.")
+            z = z_diff_action.repeat((nspa, 1))
+        else:
+            raise NotImplementedError("Noise same action must be random, same or interpolate.")
+        input_batch = {"combined_z": fact*z, "combined_label": y, "combined_src_key_padding_mask": mask, "lengths": lengths}
+        output = self.decoder(input_batch)
+        batch.update(output)
+        
+        # if self.outputxyz:
+        #     batch["output_xyz"] = self.rot2xyz(batch["output"], batch["mask"])
+        # elif self.pose_rep == "xyz":
+        #     batch["output_xyz"] = batch["output"]
+        
+        return batch
+
+    def lengths_to_mask(self, lengths):
+        max_len = max(lengths)
+        if isinstance(max_len, torch.Tensor):
+            max_len = max_len.item()
+        index = torch.arange(max_len, device=lengths.device).expand(len(lengths), max_len)
+        mask = index < lengths.unsqueeze(1)
+        return ~mask

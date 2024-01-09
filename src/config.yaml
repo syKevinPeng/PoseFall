@@ -1,16 +1,16 @@
 define: &exp_name "exp_0"
 
 train_config:
-  epochs: 1000
+  epochs: 2000
   batch_size: 20
   model_type: &train_model_type 'CVAE1E1D' # options CVAE3E1D, CVAE3E1D
-  lr: 0.0001
+  lr: 0.0001 #0.0001
   num_workers: 4
   model_save_freq: 200
   data_aug: False
 
 wandb_config:
-  wandb_mode: 'disabled'
+  wandb_mode: 'online'
   wandb_project: 'posefall'
   wandb_exp_name: *exp_name
   wandb_tags: [*train_model_type, 'train']
@@ -40,10 +40,10 @@ constant:
     fall: 180
 
 eval_config:
-  ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240108_114306-ilynabb6/files/2024-01-08_11-43-06_exp_8/epoch_399.pth"
+  ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240108_185211-5uckbnfm/files/2024-01-08_18-52-11_exp_0/epoch_199.pth"
   data_path: *data_path
   output_path: "./gen_results"
-  num_to_gen: 50
+  num_to_gen: 10
   model_type: &eval_model_type 'CVAE1E1D'
   wandb_config:
     wandb_mode: 'disabled'

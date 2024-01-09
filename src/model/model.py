@@ -253,6 +253,7 @@ class Decoder(nn.Module):
 
         # shift the latent noise vector to be the action noise
         shifted_z = z + y @ self.actionBiases
+        # TODO: check this
         z = shifted_z[None]  # sequence of size 1
             
         timequeries = torch.zeros(nframes, bs, latent_dim, device=z.device)
@@ -262,6 +263,7 @@ class Decoder(nn.Module):
         output = self.seqTransDecoder(tgt=timequeries, memory=z,
                                       tgt_key_padding_mask=mask)
         
+        # TODO: check this
         output = self.finallayer(output).reshape(nframes, bs, self.njoints, self.nfeats)
         
         # zero for padded area

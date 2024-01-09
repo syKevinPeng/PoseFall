@@ -203,6 +203,21 @@ class FallingDataset1Phase(FallingDataset3Phase):
         data = data[data["phase"] != "none"]
         start_frame = randint(0, self.sampling_every_n_frames)
         data = data[start_frame :: self.sampling_every_n_frames]
+        # apply fft transformation
+        fft_data = np.fft.fft(
+            data.iloc[:, 1:-1].values.astype(float), axis=0
+        )
+        # randomly augment the data by the scale factor of 0.9-1.1
+        scale_factor = np.random.uniform(0.9, 1.1)
+        magnitudes = np.abs(fft_data) * scale_factor
+        phases = np.angle(fft_data)
+        scaled_fft_data = magnitudes * np.exp(1j * phases)
+        # inverse fft
+        sacled_bone_rot = np.fft.ifft(scaled_fft_data, axis=0)
+        augmented_data = sacled_bone_rot.real.astype(float)
+        data = pd.DataFrame(
+            data=augmented_data, columns=data.columns[1:-1]
+        )
 
         # processing label:
         label_col = np.concatenate([impact_phase_att, glitch_phase_att, fall_phase_att])
