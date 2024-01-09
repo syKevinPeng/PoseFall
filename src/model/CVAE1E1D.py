@@ -46,15 +46,6 @@ class CVAE1E1D(nn.Module):
         """
         reparameterize the latent variable
         """
-        # mu, sigma = batch[f"{phase_name}_mu"], batch[f"{phase_name}_sigma"]
-        # std = torch.exp(sigma / 2)
-        # if seed:
-        #     generator = torch.Generator(device=self.device)
-        #     generator.manual_seed(seed)
-        #     eps = std.data.new(std.size()).normal_(generator=generator)
-        # else:
-        #     eps = std.data.new(std.size()).normal_()
-        # eps = torch.randn_like(sigma)
         mu, logvar = batch[f"{phase_name}_mu"], batch[f"{phase_name}_sigma"]
         std = torch.exp(logvar / 2)
 
