@@ -41,7 +41,7 @@ def get_model(model_type, num_class):
     if model_type == "CVAE3E3D":
         model = CVAE3E3D(num_classes_dict=num_class, config=args).to(DEVICE)
     elif model_type == "CVAE3E1D":
-        model = CVAE3E1D(num_classes_dict=num_class, config=args).to(DEVICE)
+        model = CVAE3E1D(data_config_dict=num_class, config=args).to(DEVICE)
     elif model_type == "CVAE1E1D":
         model = CVAE1E1D(num_classes=num_class, config=args).to(DEVICE)
     else:

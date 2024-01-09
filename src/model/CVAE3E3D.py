@@ -16,23 +16,33 @@ class CVAE3E3D(nn.Module):
     """
     CVAE model with three decoder and three encoders.
     """
-    def __init__(self, num_classes_dict, config, latent_dim = 256, device = "cuda") -> None:
+    def __init__(self, data_config_dict:dict, config, latent_dim = 256, device = "cuda") -> None:
         super().__init__()
         self.phase_names = config['constant']['PHASES']
-        self.num_classes_dict = num_classes_dict
+        self.data_config_dict = data_config_dict
         self.device = device
         self.latent_dim =latent_dim
+        self.num_joitns = data_config_dict["num_joints"]
+        self.feat_dim = data_config_dict["feat_dim"]
         # initialize encoder and decoder for each phase
         for phase in self.phase_names:
             setattr(
                 self,
                 f"{phase}_encoder",
-                 Encoder(num_classes=num_classes_dict[phase], phase_names=phase, latent_dim=self.latent_dim),
+                Encoder(num_classes=data_config_dict[phase]["label_size"], 
+                        phase_names=phase, 
+                        latent_dim=self.latent_dim, 
+                        njoints=data_config_dict["num_joints"], 
+                        nfeats=data_config_dict["feat_dim"])
             )
             setattr(
                 self,
                 f"{phase}_decoder",
-                Decoder(num_classes=num_classes_dict[phase], phase_names=phase, latent_dim=self.latent_dim),
+                Decoder(num_classes=data_config_dict[phase]["label_size"], 
+                        phase_names=phase, 
+                        latent_dim=self.latent_dim, 
+                        njoints=data_config_dict["num_joints"], 
+                        nfeats=data_config_dict["feat_dim"])
             )
         self.config = config
 

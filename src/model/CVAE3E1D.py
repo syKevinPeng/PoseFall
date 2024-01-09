@@ -18,20 +18,27 @@ class CVAE3E1D(CVAE3E3D):
     """
     CVAE model with three encoder and one decoders. 
     """
-    def __init__(self, num_classes_dict:dict, config, latent_dim = 256, device = "cuda") -> None:
-        super().__init__(num_classes_dict, config)
+    def __init__(self, data_config_dict:dict, config, latent_dim = 256, device = "cuda") -> None:
+        super().__init__(data_config_dict, config)
         self.phase_names = config['constant']['PHASES']
-        self.num_classes_dict = num_classes_dict
+        self.num_classes_dict = data_config_dict
         self.device = device
         self.latent_dim =latent_dim
+        self.num_joints = data_config_dict["num_joints"]
+        self.feat_dim = data_config_dict["feat_dim"]
         # initialize encoder and decoder for each phase
         for phase in self.phase_names:
             setattr(
                 self,
                 f"{phase}_encoder",
-                Encoder(num_classes=num_classes_dict[phase], phase_names=phase, latent_dim=self.latent_dim),
+                Encoder(num_classes=data_config_dict[phase]["label_size"], 
+                        phase_names=phase, 
+                        latent_dim=self.latent_dim, 
+                        njoints=data_config_dict["num_joints"], 
+                        nfeats=data_config_dict["feat_dim"])
             )
-        self.decoder = Decoder(sum(num_classes_dict.values()), phase_names="combined", latent_dim=self.latent_dim*3)
+        total_num_classes = sum([data_config_dict[phase]["label_size"] for phase in self.phase_names])
+        self.decoder = Decoder(total_num_classes, phase_names="combined", latent_dim=self.latent_dim*3, njoints=self.num_joints, nfeats=self.feat_dim )
         self.config = config
 
     def reparameterize(self, batch:dict, seed=None): 

@@ -19,10 +19,11 @@ fall_phase_att = ["Fall Attribute"]  # full list ["Fall Attribute","End Postion"
 
 class FallingDataset3Phase(Dataset):
     """
-    For three phase data loading 
+    For three phase data loading
     """
+
     def __init__(
-        self, data_path, data_aug=True, sampling_every_n_frames=60, max_frame_dict={}
+        self, data_path, max_frame_dict, data_aug=True, sampling_every_n_frames=2, phase = ["impa", "glit", "fall"]
     ):
         if not Path(data_path).exists():
             raise FileNotFoundError(f"{data_path} does not exist")
@@ -53,11 +54,10 @@ class FallingDataset3Phase(Dataset):
         self.glitch_label = self.label[glitch_label]
         self.fall_label = self.label[fall_label]
 
-        self.phase = ["impa", "glit", "fall"]
-        # set the max frame length for each phase
-        # self.max_frame = {"impa": 60, "glit": 200, "fall": 200}
-        self.max_frame = max_frame_dict
+        self.phase = phase
+        self.max_fram_dict = max_frame_dict
         self.data_aug = data_aug
+        self.sampling_every_n_frames = sampling_every_n_frames
 
     def __len__(self):
         return len(self.data_path)
@@ -136,7 +136,7 @@ class FallingDataset3Phase(Dataset):
             )
             padded_arm_loc = torch.zeros((len(arm_loc), 6))
             padded_arm_loc[:, :3] = arm_loc
-             # extend one dim
+            # extend one dim
             padded_arm_loc = padded_arm_loc.unsqueeze(1)
             # process bone rotation
             bone_rot = torch.tensor(
@@ -146,15 +146,15 @@ class FallingDataset3Phase(Dataset):
             bone_rot = euler_angles_to_matrix(bone_rot, "XYZ")
             bone_rot = matrix_to_rotation_6d(bone_rot)
             combined_pose = torch.cat(
-            (
-                bone_rot,
-                padded_arm_loc,
-                arm_rot.unsqueeze(1),
-            ),
-            dim=1,
+                (
+                    bone_rot,
+                    padded_arm_loc,
+                    arm_rot.unsqueeze(1),
+                ),
+                dim=1,
             ).float()
             curr_frame_length, num_of_joints, feat_dim = combined_pose.size()
-            max_frame = self.max_frame[phase]
+            max_frame = self.max_fram_dict[phase]
             pad_length = max_frame - curr_frame_length
             if pad_length < 0:
                 raise ValueError(
@@ -164,9 +164,9 @@ class FallingDataset3Phase(Dataset):
             padded_combined_pose = torch.cat(
                 (combined_pose, torch.zeros((pad_length, num_of_joints, feat_dim)))
             )
-            data_dict[f"{self.phase}_combined_poses"] = padded_combined_pose
+            data_dict[f"{phase}_combined_poses"] = padded_combined_pose
             src_key_padding_mask = torch.concat(
-            [torch.zeros(curr_frame_length), torch.ones(pad_length)]
+                [torch.zeros(curr_frame_length), torch.ones(pad_length)]
             )
 
             # sanity check if the padding mask are not all ones
@@ -179,7 +179,7 @@ class FallingDataset3Phase(Dataset):
                 )
             if torch.all(src_key_padding_mask == 1):
                 raise ValueError(f"src_key_padding_mask is all ones, please check")
-            data_dict[f"{self.phase}_src_key_padding_mask"] = src_key_padding_mask 
+            data_dict[f"{phase}_src_key_padding_mask"] = src_key_padding_mask
 
         return data_dict
 
@@ -188,7 +188,7 @@ class FallingDataset1Phase(FallingDataset3Phase):
     "For single phase data loading"
 
     def __init__(
-        self, data_path,max_frame_dict, data_aug=True, sampling_every_n_frames=2
+        self, data_path, max_frame_dict, data_aug=True, sampling_every_n_frames=2
     ):
         super().__init__(data_path, data_aug, sampling_every_n_frames)
         self.phase = "combined"
@@ -204,9 +204,7 @@ class FallingDataset1Phase(FallingDataset3Phase):
         start_frame = randint(0, self.sampling_every_n_frames)
         data = data[start_frame :: self.sampling_every_n_frames]
         # apply fft transformation
-        fft_data = np.fft.fft(
-            data.iloc[:, 1:-1].values.astype(float), axis=0
-        )
+        fft_data = np.fft.fft(data.iloc[:, 1:-1].values.astype(float), axis=0)
         # randomly augment the data by the scale factor of 0.9-1.1
         scale_factor = np.random.uniform(0.9, 1.1)
         magnitudes = np.abs(fft_data) * scale_factor
@@ -215,9 +213,7 @@ class FallingDataset1Phase(FallingDataset3Phase):
         # inverse fft
         sacled_bone_rot = np.fft.ifft(scaled_fft_data, axis=0)
         augmented_data = sacled_bone_rot.real.astype(float)
-        data = pd.DataFrame(
-            data=augmented_data, columns=data.columns[1:-1]
-        )
+        data = pd.DataFrame(data=augmented_data, columns=data.columns[1:-1])
 
         # processing label:
         label_col = np.concatenate([impact_phase_att, glitch_phase_att, fall_phase_att])
@@ -289,9 +285,7 @@ class FallingDataset1Phase(FallingDataset3Phase):
         # sanity check if the padding mask are not all ones
         if torch.all(src_key_padding_mask == 1):
             raise ValueError(f"src_key_padding_mask is all ones, please check")
-        data_dict[
-            f"{self.phase}_src_key_padding_mask"
-        ] = src_key_padding_mask 
+        data_dict[f"{self.phase}_src_key_padding_mask"] = src_key_padding_mask
         return data_dict
 
 

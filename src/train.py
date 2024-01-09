@@ -21,110 +21,125 @@ import numpy as np
 # Set device
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Parse command-line arguments
-parser = argparse.ArgumentParser(description="Training script")
-parser.add_argument(
-    "--config_path",
-    type=str,
-    default=Path(__file__).parent.joinpath("config.yaml"),
-    help="path to config file",
-)
-cmd_args = parser.parse_args()
-# load config file
-with open(cmd_args.config_path, "r") as f:
-    args = yaml.load(f, Loader=yaml.FullLoader)
-# ======================== prepare wandb ========================
-# Initialize wandb
-wandb_config = args["wandb_config"]
-wandb.init(
-    project=wandb_config["wandb_project"],
-    config=args,
-    mode=wandb_config["wandb_mode"],
-    tags=wandb_config["wandb_tags"],
-    name=wandb_config["wandb_exp_name"],
-    notes=wandb_config["wandb_description"],
-)
-
-# ======================== prepare files/folders ========================
-# check if ckpt path exists
-if args["data_config"]["ckpt_path"] == "":
-    ckpt_path = Path(wandb.run.dir)
-else:
-    ckpt_path = Path(args["data_config"]["ckpt_path"])
-    if not ckpt_path.exists():
-        ckpt_path.mkdir(parents=True, exist_ok=True)
-        print(f"Created checkpoint path {ckpt_path}")
-current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-ckpt_path = ckpt_path / f"{current_time}_{wandb_config['wandb_exp_name']}"
-ckpt_path.mkdir(parents=True, exist_ok=True)
-
-# ======================== define variables for training ========================
-# Define phases and data loader
-PHASES = args["constant"]["PHASES"]
-train_config = args["train_config"]
-# data = FallingDataset(args["data_config"]["data_path"], data_aug=train_config["data_aug"])
-dataset = FallingDataset1Phase(
-    args["data_config"]["data_path"], data_aug=train_config["data_aug"], max_frame_dict=args["constant"]["max_frame_dict"]
-)
-dataloaders = torch.utils.data.DataLoader(
-    dataset,
-    batch_size=train_config["batch_size"],
-    shuffle=True,
-    num_workers=train_config["num_workers"],
-)
-if "combined_label" in dataset[0].keys():
-    num_class = {"combined": dataset[0]["combined_label"].size(0)}
-    print(f"Number of classes: {num_class}")
-    num_frames, num_joints, feat_dim = dataset[0]["combined_combined_poses"].size()
-    print(f"Input size: {num_frames, num_joints, feat_dim}")
-    num_class.update(
-        {"num_frames": num_frames, "num_joints": num_joints, "feat_dim": feat_dim}
+def parse_args():
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Training script")
+    parser.add_argument(
+        "--config_path",
+        type=str,
+        default=Path(__file__).parent.joinpath("config.yaml"),
+        help="path to config file",
     )
-else:
-    # Get number of classes for each phase
-    impa_label = dataset[0]["impa_label"]
-    glit_label = dataset[0]["glit_label"]
-    fall_label = dataset[0]["fall_label"]
-    num_class = {
-        "impa": impa_label.size(0),
-        "glit": glit_label.size(0),
-        "fall": fall_label.size(0),
-    }
+    cmd_args = parser.parse_args()
+    # load config file
+    with open(cmd_args.config_path, "r") as f:
+        args = yaml.load(f, Loader=yaml.FullLoader)
+    return args
 
+def prepare_wandb():
+    # ======================== prepare wandb ========================
+    # Initialize wandb
+    wandb_config = args["wandb_config"]
+    wandb.init(
+        project=wandb_config["wandb_project"],
+        config=args,
+        mode=wandb_config["wandb_mode"],
+        tags=wandb_config["wandb_tags"],
+        name=wandb_config["wandb_exp_name"],
+        notes=wandb_config["wandb_description"],
+    )
+    return wandb_config
 
-
-def init():
+def get_model_and_dataset(args):
+    model_name = args["train_config"]["model_type"]
+    train_config = args["train_config"]
     # ======================== actual training pipeline ========================
     # Initialize model and optimizer
-    if train_config["model_type"] == "CVAE3E3D":
-        model = CVAE3E3D(num_classes_dict=num_class, config=args).to(DEVICE)
-    elif train_config["model_type"] == "CVAE3E1D":
-        model = CVAE3E1D(num_classes_dict=num_class, config=args).to(DEVICE)
-    elif train_config["model_type"] == "CVAE1E1D":
-        model = CVAE1E1D(num_classes=num_class, config=args).to(DEVICE)
+    if model_name== "CVAE3E3D":
+        model = CVAE3E3D(num_classes_dict=data_configs, config=args).to(DEVICE)
+        dataset = FallingDataset3Phase(
+        args["data_config"]["data_path"], data_aug=train_config["data_aug"], max_frame_dict=args["constant"]["max_frame_dict"], phase_names=PHASES
+        )
+    elif model_name== "CVAE3E1D":
+        dataset = FallingDataset3Phase(
+        args["data_config"]["data_path"], data_aug=train_config["data_aug"], max_frame_dict=args["constant"]["max_frame_dict"]
+        )
+        data_configs = {}
+        for phase in PHASES:
+            num_frames, num_joints, feat_dim = dataset[0][f"{phase}_combined_poses"].size()
+            data_configs.update({
+                phase:{"num_frames": num_frames, "label_size":dataset[0][f"{phase}_label"].size(0)}
+            })
+        data_configs.update({
+            "num_joints": num_joints, "feat_dim": feat_dim, 
+        })
+        print(f'Data Configs: \n {data_configs}')
+        model = CVAE3E1D(data_config_dict=data_configs, config=args).to(DEVICE)
+
+    elif model_name== "CVAE1E1D":
+        dataset = FallingDataset1Phase(
+        args["data_config"]["data_path"], data_aug=train_config["data_aug"], max_frame_dict=args["constant"]["max_frame_dict"]
+        )
+        data_configs = {"combined": dataset[0]["combined_label"].size(0)}
+        print(f"Number of classes: {data_configs}")
+        num_frames, num_joints, feat_dim = dataset[0]["combined_combined_poses"].size()
+        print(f"Input size: {num_frames, num_joints, feat_dim}")
+        data_configs.update(
+            {"num_frames": num_frames, "num_joints": num_joints, "feat_dim": feat_dim}
+        )
+        model = CVAE1E1D(num_classes=data_configs, config=args).to(DEVICE)
+        # data = FallingDataset(args["data_config"]["data_path"], data_aug=train_config["data_aug"])
     else:
         raise ValueError(f"Model type {train_config['model_type']} not supported")
-    optimizer = torch.optim.AdamW(model.parameters(), lr=train_config["lr"])
+    return model, dataset
 
+def prepare_pretrain_weights(args):
     # load pretrained model
     pretrained_weights = Path(args["data_config"]["pretrained_weights"])
     if not pretrained_weights.exists():
         raise ValueError(f"Pretrained weights {pretrained_weights} does not exist")
-    # loaded_weights = torch.load(pretrained_weights)
-    loaded_weights_: "dict[str,torch.Torch]" = torch.load(
-        "/home/siyuan/research/PoseFall/src/model/pretrained_models/uestc/checkpoint_1000.pth.tar"
-    )
-
+    loaded_weights = torch.load(pretrained_weights)
     weights_to_skip = ["encoder.muQuery", "encoder.sigmaQuery", "decoder.actionBiases","encoder.skelEmbedding.weight","decoder.finallayer.weight","decoder.finallayer.bias"]
     loaded_weights = {
-        k: v for k, v in loaded_weights_.items() if k not in weights_to_skip
+        k: v for k, v in loaded_weights.items() if k not in weights_to_skip
     }
+    return loaded_weights
 
+if __name__ == "__main__":
+    
+    args = parse_args()
+    wandb_config = prepare_wandb()
+    train_config = args["train_config"]
+    PHASES = args["constant"]["PHASES"]
+
+    # ======================== prepare files/folders ========================
+    # check if ckpt path exists
+    if args["data_config"]["ckpt_path"] == "":
+        ckpt_path = Path(wandb.run.dir)
+    else:
+        ckpt_path = Path(args["data_config"]["ckpt_path"])
+        if not ckpt_path.exists():
+            ckpt_path.mkdir(parents=True, exist_ok=True)
+            print(f"Created checkpoint path {ckpt_path}")
+    current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    ckpt_path = ckpt_path / f"{current_time}_{wandb_config['wandb_exp_name']}"
+    ckpt_path.mkdir(parents=True, exist_ok=True)
+    # ======================== define variables for training ========================
+    # get model, dataset, dataloader and optimizer
+    model, dataset = get_model_and_dataset(args=args)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=train_config["lr"])
+    dataloaders = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=train_config["batch_size"],
+        shuffle=True,
+        num_workers=train_config["num_workers"],
+    )
+
+    # ======================== load pretrained weights ========================
+    loaded_weights = prepare_pretrain_weights(args)
     model.load_state_dict(loaded_weights, strict=False)
-    return model, optimizer, loaded_weights_, loaded_weights
 
-
-def main(model: nn.Module, optimizer: torch.optim.Optimizer):
+    # ======================== actual training pipeline ========================
     for epoch in range(train_config["epochs"]):  # Epoch loop
         epoch_loss = 0
         cum_loss_dict = {}
@@ -152,8 +167,3 @@ def main(model: nn.Module, optimizer: torch.optim.Optimizer):
         if (epoch+1) % train_config["model_save_freq"] == 0:  
             checkpoint_path = ckpt_path / f"epoch_{epoch}.pth"
             torch.save(model.state_dict(), checkpoint_path)
-
-
-if __name__ == "__main__":
-    model, optimizer, loaded_weights_, loaded_weights = init()
-    main( model, optimizer)
