@@ -142,12 +142,20 @@ if __name__ == "__main__":
             whole_sequences = []
             for phase in PHASES:
                 model_output = genreated_batch[f"{phase}_output"]
-                model_output = model_output.cpu().detach()
-                whole_sequences.append(model_output)
+                model_output = model_output
+                # remove padding
+                model_output = model_output[~(input_batch[f"{phase}_mask"].bool())]
+                batch_size, num_fram, num_joints, feat_dim = whole_sequences.size()
+                whole_sequences.append(model_output).reshape(batch_size, -1, num_joints, feat_dim).cpu().detach()
             whole_sequences = torch.concat(whole_sequences, axis=1)
         elif eval_config["model_type"] == "CVAE3E1D" or eval_config["model_type"] == "CVAE1E1D":
             whole_sequences = genreated_batch["combined_output"]
-            whole_sequences = whole_sequences.cpu().detach()
+            whole_sequences = whole_sequences
+            # remove padding
+            batch_size, num_fram, num_joints, feat_dim = whole_sequences.size()
+            whole_sequences = whole_sequences[~(input_batch["combined_mask"].bool())]
+            whole_sequences = whole_sequences.reshape(batch_size, -1, num_joints, feat_dim).cpu().detach()
+
 
         # parse the output
         parsed_seequnces = parse_output(whole_sequences)

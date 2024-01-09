@@ -1,4 +1,5 @@
 import argparse
+from distutils.ccompiler import new_compiler
 from json import decoder
 from typing import cast
 from click import option
@@ -93,17 +94,35 @@ def get_model_and_dataset(args):
         raise ValueError(f"Model type {train_config['model_type']} not supported")
     return model, dataset
 
-def prepare_pretrain_weights(args):
+def prepare_pretrain_weights(args, curr_model_weights):
     # load pretrained model
     pretrained_weights = Path(args["data_config"]["pretrained_weights"])
+    model_name = args["train_config"]["model_type"]
     if not pretrained_weights.exists():
         raise ValueError(f"Pretrained weights {pretrained_weights} does not exist")
-    loaded_weights = torch.load(pretrained_weights)
+    pretrain_loaded_weights = torch.load(pretrained_weights)
     weights_to_skip = ["encoder.muQuery", "encoder.sigmaQuery", "decoder.actionBiases","encoder.skelEmbedding.weight","decoder.finallayer.weight","decoder.finallayer.bias"]
-    loaded_weights = {
-        k: v for k, v in loaded_weights.items() if k not in weights_to_skip
+    pretrain_loaded_weights = {
+        k: v for k, v in pretrain_loaded_weights.items() if k not in weights_to_skip
     }
-    return loaded_weights
+
+    if model_name == "CVAE3E1D":
+        new_pretrain_laoded_weights = {}
+        # copy encoder weights:
+        for phase in PHASES:
+            for key in pretrain_loaded_weights.keys():
+                if "encoder" in key:
+                    new_key = re.sub(r"(encoder)(?=\.)", f"{phase}_encoder", key, count=1)
+                    new_pretrain_laoded_weights[new_key] = pretrain_loaded_weights[key]
+                else:
+                    new_pretrain_laoded_weights[key] = pretrain_loaded_weights[key]
+        pretrain_loaded_weights = new_pretrain_laoded_weights
+    
+    # print out weights that are not loaded
+    for key in curr_model_weights.keys():
+        if key not in pretrain_loaded_weights.keys():
+            print(f"Key {key} is not loaded")
+    return pretrain_loaded_weights
 
 if __name__ == "__main__":
     
@@ -127,6 +146,7 @@ if __name__ == "__main__":
     # ======================== define variables for training ========================
     # get model, dataset, dataloader and optimizer
     model, dataset = get_model_and_dataset(args=args)
+    curr_model_weights = model.state_dict()
     optimizer = torch.optim.AdamW(model.parameters(), lr=train_config["lr"])
     dataloaders = torch.utils.data.DataLoader(
         dataset,
@@ -136,7 +156,7 @@ if __name__ == "__main__":
     )
 
     # ======================== load pretrained weights ========================
-    loaded_weights = prepare_pretrain_weights(args)
+    loaded_weights = prepare_pretrain_weights(args, curr_model_weights)
     model.load_state_dict(loaded_weights, strict=False)
 
     # ======================== actual training pipeline ========================

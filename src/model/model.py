@@ -71,7 +71,6 @@ class  Encoder(nn.Module):
 
         self.muQuery = nn.Parameter(torch.randn(self.num_classes, self.latent_dim))
         self.sigmaQuery = nn.Parameter(torch.randn(self.num_classes, self.latent_dim))
-        
         self.skelEmbedding = nn.Linear(self.input_feats, self.latent_dim)
         
         self.sequence_pos_encoder = PositionalEncoding(self.latent_dim, self.dropout)

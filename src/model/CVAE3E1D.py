@@ -14,12 +14,12 @@ from .model import Encoder, Decoder
 import wandb, scipy
 from .CVAE3E3D import CVAE3E3D
 
-class CVAE3E1D(CVAE3E3D):
+class CVAE3E1D(nn.Module):
     """
     CVAE model with three encoder and one decoders. 
     """
     def __init__(self, data_config_dict:dict, config, latent_dim = 256, device = "cuda") -> None:
-        super().__init__(data_config_dict, config)
+        super().__init__()
         self.phase_names = config['constant']['PHASES']
         self.num_classes_dict = data_config_dict
         self.device = device
@@ -35,11 +35,13 @@ class CVAE3E1D(CVAE3E3D):
                         phase_names=phase, 
                         latent_dim=self.latent_dim, 
                         njoints=data_config_dict["num_joints"], 
-                        nfeats=data_config_dict["feat_dim"])
+                        nfeats=data_config_dict["feat_dim"],
+                        input_feature_dim=self.num_joints*self.feat_dim)
             )
         total_num_classes = sum([data_config_dict[phase]["label_size"] for phase in self.phase_names])
-        self.decoder = Decoder(total_num_classes, phase_names="combined", latent_dim=self.latent_dim*3, njoints=self.num_joints, nfeats=self.feat_dim )
+        self.decoder = Decoder(total_num_classes, phase_names="combined", latent_dim=self.latent_dim, njoints=self.num_joints, nfeats=self.feat_dim, input_feature_dim=self.num_joints*self.feat_dim)
         self.config = config
+        self.z2decoder = nn.Linear(in_features=self.latent_dim*len(self.phase_names), out_features=self.latent_dim)
 
     def reparameterize(self, batch:dict, seed=None): 
         """
@@ -67,10 +69,10 @@ class CVAE3E1D(CVAE3E3D):
     def prepare_batch(self, batch):
         for phase in self.phase_names:
             batch[f"{phase}_label"] = batch[f"{phase}_label"].to(self.device)
-            batch[f"{phase}_lengths"] = batch[f"{phase}_lengths"].to(self.device)
+            # batch[f"{phase}_lengths"] = batch[f"{phase}_lengths"].to(self.device)
             batch[f"{phase}_combined_poses"] = batch[f"{phase}_combined_poses"].to(self.device)
             batch[f"{phase}_src_key_padding_mask"] = batch[f"{phase}_src_key_padding_mask"].to(self.device)
-        batch["combined_poses"] = torch.cat([batch[f"{phase}_combined_poses"] for phase in self.phase_names], dim=1).to(self.device)
+        batch["combined_combined_poses"] = torch.cat([batch[f"{phase}_combined_poses"] for phase in self.phase_names], dim=1).to(self.device)
         batch["combined_src_key_padding_mask"] = torch.cat([batch[f"{phase}_src_key_padding_mask"] for phase in self.phase_names], dim=1).to(self.device)
         batch["combined_label"] = torch.cat([batch[f"{phase}_label"] for phase in self.phase_names], dim=1).to(self.device)
         return batch
@@ -84,14 +86,16 @@ class CVAE3E1D(CVAE3E3D):
             encoder_output_list.extend([encoder_output[f"{phase}_mu"], encoder_output[f"{phase}_sigma"]])
             batch.update(encoder_output)
         # reparameterize
-        batch["z"] = self.reparameterize(batch) # shape(batch_size, latent_dim)
+        z = self.reparameterize(batch) # shape(batch_size, 3*latent_dim)
+        # add a linear layer to transform z to the same dimension as the decoder input
+        batch["combined_z"] = self.z2decoder(z)
         # decoder
         batch.update(self.decoder(batch))
         return batch
   
 
     def compute_loss(self, batch):
-        return compute_in_phase_loss(batch, phase_name = None, all_phases=self.phase_names, weight_dict=self.config['loss_config'])
+        return compute_in_phase_loss(batch, phase_name = "combined", weight_dict=self.config['loss_config'])
     
     def generate(self, input_batch):
         """
