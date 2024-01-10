@@ -62,7 +62,7 @@ class CVAE3E1D(nn.Module):
         else:
             eps = std.data.new(std.size()).normal_()
         eps = torch.randn_like(combined_sigma)
-        z = combined_mu + eps * combined_sigma  # eps.mul(std).add_(mu)
+        z = combined_mu + eps * std  # eps.mul(std).add_(mu)
         return z
 
 

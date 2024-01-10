@@ -1,9 +1,9 @@
-define: &exp_name "exp_2"
+define: &exp_name "exp_3"
 
 train_config:
-  epochs: 2000
+  epochs: 3000
   batch_size: 20
-  model_type: &train_model_type 'CVAE3E1D' # options CVAE3E1D, CVAE3E1D
+  model_type: &train_model_type 'CVAE3E3D' # options CVAE3E1D, CVAE3E1D
   lr: 0.0001 #0.0001
   num_workers: 4
   model_save_freq: 200
@@ -26,8 +26,8 @@ loss_config:
   human_model_loss_weight: 1
   vertex_loss_weight: 1
   kl_loss_weight: 0.00001
-  loc_loss_weight: 0
-  var_loss_weight: 0
+  loc_loss_weight: 1
+  var_loss_weight: 0.1
 
 constant:
   PHASES:
