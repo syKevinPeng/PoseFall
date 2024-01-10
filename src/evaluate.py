@@ -71,6 +71,60 @@ def prepare_input_instance(data_instance):
 
     return num_class, input_type
 
+def get_model_and_dataset(args):
+    model_name = args["eval_config"]["model_type"]
+    train_config = args["eval_config"]
+    # ======================== actual training pipeline ========================
+    # Initialize model and optimizer
+    if model_name== "CVAE3E3D":
+        dataset = FallingDataset3Phase(
+        args["data_config"]["data_path"], data_aug=False, max_frame_dict=args["constant"]["max_frame_dict"], phase=PHASES
+        )
+        data_configs = {}
+        for phase in PHASES:
+            num_frames, num_joints, feat_dim = dataset[0][f"{phase}_combined_poses"].size()
+            data_configs.update({
+                phase:{"num_frames": num_frames, "label_size":dataset[0][f"{phase}_label"].size(0)}
+            })
+        data_configs.update({
+            "num_joints": num_joints, "feat_dim": feat_dim, 
+        })
+        model = CVAE3E3D(data_config_dict=data_configs, config=args).to(DEVICE)
+        input_type = "seperated"
+    elif model_name== "CVAE3E1D":
+        dataset = FallingDataset3Phase(
+        args["data_config"]["data_path"], data_aug=False, max_frame_dict=args["constant"]["max_frame_dict"]
+        )
+        data_configs = {}
+        for phase in PHASES:
+            num_frames, num_joints, feat_dim = dataset[0][f"{phase}_combined_poses"].size()
+            data_configs.update({
+                phase:{"num_frames": num_frames, "label_size":dataset[0][f"{phase}_label"].size(0)}
+            })
+        data_configs.update({
+            "num_joints": num_joints, "feat_dim": feat_dim, 
+        })
+        print(f'Data Configs: \n {data_configs}')
+        model = CVAE3E1D(data_config_dict=data_configs, config=args).to(DEVICE)
+        input_type = "seperated"
+    elif model_name== "CVAE1E1D":
+        dataset = FallingDataset1Phase(
+        args["data_config"]["data_path"], data_aug=False, max_frame_dict=args["constant"]["max_frame_dict"]
+        )
+        data_configs = {"combined": dataset[0]["combined_label"].size(0)}
+        print(f"Number of classes: {data_configs}")
+        num_frames, num_joints, feat_dim = dataset[0]["combined_combined_poses"].size()
+        print(f"Input size: {num_frames, num_joints, feat_dim}")
+        data_configs.update(
+            {"num_frames": num_frames, "num_joints": num_joints, "feat_dim": feat_dim}
+        )
+        model = CVAE1E1D(num_classes=data_configs, config=args).to(DEVICE)
+        # data = FallingDataset(args["data_config"]["data_path"], data_aug=train_config["data_aug"])
+        input_type = "combined"
+    else:
+        raise ValueError(f"Model type {train_config['model_type']} not supported")
+    return model, dataset, input_type
+
 
 
 if __name__ == "__main__":
@@ -102,19 +156,20 @@ if __name__ == "__main__":
     if not data_path.exists():
         raise ValueError(f"Data path {data_path} does not exist")
 
-    dataset = FallingDataset1Phase(data_path, max_frame_dict=args["constant"]["max_frame_dict"])
+    # dataset = FallingDataset1Phase(data_path, max_frame_dict=args["constant"]["max_frame_dict"])
+    if not Path(eval_config["output_path"]).exists():
+        print(f"Output path {eval_config['output_path']} does not exist... Creating it")
+        Path(eval_config["output_path"]).mkdir(parents=True, exist_ok=True)
+    # ======================== prepare model ========================
+    # num_class, input_type=prepare_input_instance(dataset[0])
+    model, dataset, input_type = get_model_and_dataset(args)
     dataloaders = torch.utils.data.DataLoader(
         dataset,
         batch_size=1,
         shuffle=False,
         num_workers=0,
     )
-    if not Path(eval_config["output_path"]).exists():
-        print(f"Output path {eval_config['output_path']} does not exist... Creating it")
-        Path(eval_config["output_path"]).mkdir(parents=True, exist_ok=True)
-    # ======================== prepare model ========================
-    num_class, input_type=prepare_input_instance(dataset[0])
-    model = get_model(eval_config["model_type"], num_class=num_class)
+    # model = get_model(eval_config["model_type"], num_class=num_class)
     model.load_state_dict(state_dict)
     model.eval()
 
@@ -143,10 +198,12 @@ if __name__ == "__main__":
             for phase in PHASES:
                 model_output = genreated_batch[f"{phase}_output"]
                 model_output = model_output
+                batch_size = model_output.size(0)
                 # remove padding
                 model_output = model_output[~(input_batch[f"{phase}_mask"].bool())]
-                batch_size, num_fram, num_joints, feat_dim = whole_sequences.size()
-                whole_sequences.append(model_output).reshape(batch_size, -1, num_joints, feat_dim).cpu().detach()
+                num_fram, num_joints, feat_dim = model_output.size()
+                phase_output = model_output.reshape(batch_size, -1, num_joints, feat_dim).cpu().detach()
+                whole_sequences.append(phase_output)
             whole_sequences = torch.concat(whole_sequences, axis=1)
         elif eval_config["model_type"] == "CVAE3E1D" or eval_config["model_type"] == "CVAE1E1D":
             whole_sequences = genreated_batch["combined_output"]

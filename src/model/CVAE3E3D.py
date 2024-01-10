@@ -147,6 +147,7 @@ class CVAE3E3D(nn.Module):
         interphase_loss, inter_loss_dict = compute_inter_phase_loss(self.phase_names, batch, loss_weights_dict=self.config['loss_config'])
         total_loss += interphase_loss
         all_loss_dict.update(inter_loss_dict)
+        all_loss_dict.update({"total_loss": total_loss.items()})
         return total_loss, all_loss_dict
     
     def generate(self, input_batch):
@@ -155,11 +156,6 @@ class CVAE3E3D(nn.Module):
         @param input_batch: a dictionary of input batch, it should contains the following keys: impa_label, glit_label, fall_label, impa_length, glit_length, fall_length
         """
         impa_label = input_batch["impa_label"]
-        glit_label = input_batch["glit_label"]
-        fall_label = input_batch["fall_label"]
-        impa_mask  = input_batch["impa_mask"]
-        glit_mask  = input_batch["glit_mask"]
-        fall_mask  = input_batch["fall_mask"]
 
         batch_size = impa_label.size(0)
 
@@ -176,21 +172,23 @@ class CVAE3E3D(nn.Module):
             model_input_batch.update(getattr(self, f"{phase}_decoder")(model_input_batch))
 
         # remove the padding based on the mask
-        for phase in self.phase_names:
-            model_input_batch[f"{phase}_output"] = model_input_batch[f"{phase}_output"]
-            # remove the padding
-            model_output = model_input_batch[f"{phase}_output"]
-            # filter out the positions where the mask is 1
-            mask = model_input_batch[f"{phase}_src_key_padding_mask"] # mask: 0 means valid, 1 means invalid
-            # inverse the mask
-            mask = 1-mask
-            mask = mask.unsqueeze(-1).expand(-1, -1, model_output.size(-1))
-            # remove the padding
-            model_output = model_output * mask
-            # remove the rows where all the elements are 0. 
-            model_output = model_output[model_output.sum(dim=2) != 0]
-            # check the dimension
-            if len(model_output.size()) == 2: # If the batch size is 1, add a dimension
-                model_output = model_output.unsqueeze(0)
-            model_input_batch[f"{phase}_output"] = model_output
+        # for phase in self.phase_names:
+        #     # remove the padding
+        #     model_output = model_input_batch[f"{phase}_output"]
+            # # filter out the positions where the mask is 1
+            # mask = model_input_batch[f"{phase}_src_key_padding_mask"] # mask: 0 means valid, 1 means invalid
+            # print(f'output size: {model_output.size()}')
+            # print(f'mask size: {mask.size()}')
+            # # inverse the mask
+            # mask = 1-mask
+            # # remove the padding
+            # print(f'mask size: {mask.size()}')
+            # print(f'model_output size: {model_output.size()}')
+            # model_output = model_output * mask
+            # # remove the rows where all the elements are 0. 
+            # model_output = model_output[model_output.sum(dim=2) != 0]
+            # # check the dimension
+            # if len(model_output.size()) == 2: # If the batch size is 1, add a dimension
+            #     model_output = model_output.unsqueeze(0)
+            # model_input_batch[f"{phase}_output"] = model_output
         return model_input_batch
