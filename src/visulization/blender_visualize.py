@@ -5,23 +5,93 @@ import bpy, json
 import numpy as np
 import importlib
 import sys, os
-dir_path = os.path.dirname(os.path.realpath(__file__))
-sys.path.append(dir_path)
-import blender_utils
-importlib.reload(blender_utils)
-from blender_utils import *
-import joint_names
-importlib.reload(joint_names)
-from joint_names import MOCAP_JOINT_NAMES, SMPL_JOINT_NAMES
 import math
+from mathutils import Euler, Matrix
+
+# joint_names
+SMPL_JOINT_NAMES = [
+    "Pelvis",
+    "L_Hip",
+    "R_Hip",
+    "Spine1",
+    "L_Knee",
+    "R_Knee",
+    "Spine2",
+    "L_Ankle",
+    "R_Ankle",
+    "Spine3",
+    "L_Foot",
+    "R_Foot",
+    "Neck",
+    "L_Collar",
+    "R_Collar",
+    "Head",
+    "L_Shoulder",
+    "R_Shoulder",
+    "L_Elbow",
+    "R_Elbow",
+    "L_Wrist",
+    "R_Wrist",
+    "L_Hand",
+    "R_Hand",
+]
+
+def empty_scene():
+    """
+    Empty the blender scene
+    """
+    bpy.ops.object.select_all(action='SELECT')
+    bpy.ops.object.delete(use_global=False, confirm=False)
+    bpy.ops.outliner.orphans_purge()
+    
+def set_obj_location(obj_name, location):
+    """
+    Set the location of an object.
+    @param obj_name: The name of object.
+    @param location: The location to set.
+    """
+    obj = bpy.context.scene.objects[obj_name]
+    obj.location = location
+    bpy.context.view_layer.update()
+
+def set_obj_rotation(obj_name, rotation):
+    """
+    Set the rotation of an object.
+    @param obj_name: The name of object.
+    @param rotation: The rotation to set.
+    """
+    obj = bpy.context.scene.objects[obj_name]
+    obj.rotation_euler = rotation
+    bpy.context.view_layer.update()
+
+def set_all_local_bone_rot(armature_name, joint_list, joint_local_rot):
+    '''
+    Set the local rotations of all bones in an SMPLX armature.
+
+    @param armature_name: The name of the armature.
+    @param joint_list: A list of joint names.
+    @param joint_local_rot: A list of local rotations (as Euler angles) for each bone in the SMPLX armature.
+    '''
+    # get the current smpl bone rotation
+    armature = bpy.context.scene.objects[armature_name]
+    for bone_name, local_rot in zip(joint_list, joint_local_rot):
+        bone = armature.pose.bones[bone_name]
+        # set rotation mode of the bone to euler:
+        bone.rotation_mode = 'XYZ'
+        local_rot_mat = Euler(local_rot, 'XYZ').to_matrix()
+        bone.rotation_euler = local_rot_mat.to_euler('XYZ')
+    # Update the view layer to reflect changes
+    bpy.context.view_layer.update()
+
+
 # remove everything
 empty_scene()
-
-
 # Taking cmd args
-input_csv_path = str(sys.argv[1])
-output_directory = str(sys.argv[2])
-
+argv = sys.argv
+argv = argv[argv.index("--") + 1:]
+input_csv_path = str(argv[0])
+output_directory = str(argv[1])
+print(f'processing input csv file: {input_csv_path}')
 
 
 # Create a new SMPL armature and let it move acccording to recorded data
@@ -62,6 +132,7 @@ for frame in dataset:
 camera_data = bpy.data.cameras.new(name = "camera")
 camera_obj = bpy.data.objects.new("camera", camera_data)
 bpy.context.collection.objects.link(camera_obj)
+bpy.context.scene.camera = camera_obj
 
 # Position the camera
 camera_obj.location = (7, 0, -0.5)
