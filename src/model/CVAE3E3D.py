@@ -170,25 +170,4 @@ class CVAE3E3D(nn.Module):
         for phase in self.phase_names: 
             # Decoder
             model_input_batch.update(getattr(self, f"{phase}_decoder")(model_input_batch))
-
-        # remove the padding based on the mask
-        # for phase in self.phase_names:
-        #     # remove the padding
-        #     model_output = model_input_batch[f"{phase}_output"]
-            # # filter out the positions where the mask is 1
-            # mask = model_input_batch[f"{phase}_src_key_padding_mask"] # mask: 0 means valid, 1 means invalid
-            # print(f'output size: {model_output.size()}')
-            # print(f'mask size: {mask.size()}')
-            # # inverse the mask
-            # mask = 1-mask
-            # # remove the padding
-            # print(f'mask size: {mask.size()}')
-            # print(f'model_output size: {model_output.size()}')
-            # model_output = model_output * mask
-            # # remove the rows where all the elements are 0. 
-            # model_output = model_output[model_output.sum(dim=2) != 0]
-            # # check the dimension
-            # if len(model_output.size()) == 2: # If the batch size is 1, add a dimension
-            #     model_output = model_output.unsqueeze(0)
-            # model_input_batch[f"{phase}_output"] = model_output
         return model_input_batch
