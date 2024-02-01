@@ -7,7 +7,7 @@ importlib.reload(joint_names)
 from joint_names import MOCAP_JOINT_NAMES, SMPL_JOINT_NAMES
 
 import bpy
-from mathutils import Euler, Matrix
+from mathutils import Euler
 import numpy as np
 
 # ----------------- Bone realted -----------------

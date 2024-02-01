@@ -23,7 +23,7 @@ if not os.path.exists(output_dir):
 mocap_fbx_list = [os.path.join(dataset_dir, f) for f in os.listdir(dataset_dir) if f.endswith('.fbx')]
 mocap_fbx_list.sort()
 # need for for loop to loop through all the mocap data, but for now, just use one
-mocap_fbx_list = mocap_fbx_list[49:]
+# mocap_fbx_list = mocap_fbx_list[49:]
 for mocap_fbx_path in mocap_fbx_list:
     # use regex to match the trial number and actor name
     trial_num = re.search(r'Trial_(\d+)', mocap_fbx_path).group(1)

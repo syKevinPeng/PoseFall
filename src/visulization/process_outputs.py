@@ -4,7 +4,7 @@ from tqdm import tqdm
 import imageio
 import numpy as np
 # input dir
-result_dir = "/home/siyuan/research/PoseFall/src/gen_results1E1D"
+result_dir = "/home/siyuan/research/PoseFall/src/gen_results1E1D_90"
 result_dir = Path(result_dir)
 if not result_dir.exists():
     raise Exception("result_dir does not exist.")
@@ -24,6 +24,9 @@ for csv_file in tqdm(result_files, desc="Processing files using Blender"):
     selected_images = image_files[::step]
     # read selected images
     images = [imageio.imread(str(image_file)) for image_file in selected_images]
+    # crop the 10% left and right margin of the image
+    margin = 0.3
+    images = [image[:,int(image.shape[1]*margin):, :]for image in images]
     # concatenate images
     image = np.concatenate(images, axis=1)
     # save the image

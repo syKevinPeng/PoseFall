@@ -29,7 +29,7 @@ from pytorch3d.renderer import (
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer.mesh import TexturesVertex
 # %%
-DATAPATH = "/home/siyuan/research/PoseFall/src/visulization/viz_output/CVAE_output.csv"
+DATAPATH = "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data/Trial_100.csv"
 VIZ_OUTPUT = "/home/siyuan/research/PoseFall/src/visulization/viz_output"
 DATAPATH = Path(DATAPATH)
 VIZ_OUTPUT = Path(VIZ_OUTPUT)

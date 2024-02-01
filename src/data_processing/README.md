@@ -8,11 +8,11 @@
 ```python
 blender -b -P "dataset_processing.py"
 ```
-ouput data will be stored at ../../data/MoCap/Mocap_processed_data/Trial_*.csv
+ouput data will be stored at the "output_dir" location in the script
 
 - To process the labels
 ```python
-python process_labels.py
+python label_processing.py
 ```
 ouput data will be stored at ../../data/MoCap/Mocap_processed_data/label.csv
 

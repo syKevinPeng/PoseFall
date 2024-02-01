@@ -15,7 +15,7 @@ from data_processing.utils import (
 )
 from data_processing import joint_names
 import argparse
-from visulization.pose_vis import visulize_poses
+from src.visulization.torch3d_vis import visulize_poses
 import imageio
 import yaml, wandb
 
@@ -72,8 +72,8 @@ def prepare_input_instance(data_instance):
     return num_class, input_type
 
 def get_model_and_dataset(args):
-    model_name = args["eval_config"]["model_type"]
-    train_config = args["eval_config"]
+    model_name = args["generate_config"]["model_type"]
+    train_config = args["generate_config"]
     # ======================== actual training pipeline ========================
     # Initialize model and optimizer
     if model_name== "CVAE3E3D":
@@ -139,7 +139,7 @@ if __name__ == "__main__":
 
     # ======================== prepare wandb ========================
     # Initialize wandb
-    wandb_config = args["eval_config"]["wandb_config"]
+    wandb_config = args["generate_config"]["wandb_config"]
     wandb.init(
         project=wandb_config["wandb_project"],
         config=args,
@@ -149,17 +149,17 @@ if __name__ == "__main__":
         notes=wandb_config["wandb_description"],
     )
     PHASES = args["constant"]["PHASES"]
-    eval_config = args["eval_config"]
-    state_dict = load_ckpts(eval_config["ckpt_path"])
+    generate_config = args["generate_config"]
+    state_dict = load_ckpts(generate_config["ckpt_path"])
     # ======================== prepare data ========================
-    data_path = Path(eval_config["data_path"])
+    data_path = Path(generate_config["data_path"])
     if not data_path.exists():
         raise ValueError(f"Data path {data_path} does not exist")
 
     # dataset = FallingDataset1Phase(data_path, max_frame_dict=args["constant"]["max_frame_dict"])
-    if not Path(eval_config["output_path"]).exists():
-        print(f"Output path {eval_config['output_path']} does not exist... Creating it")
-        Path(eval_config["output_path"]).mkdir(parents=True, exist_ok=True)
+    if not Path(generate_config["output_path"]).exists():
+        print(f"Output path {generate_config['output_path']} does not exist... Creating it")
+        Path(generate_config["output_path"]).mkdir(parents=True, exist_ok=True)
     # ======================== prepare model ========================
     # num_class, input_type=prepare_input_instance(dataset[0])
     model, dataset, input_type = get_model_and_dataset(args)
@@ -169,7 +169,7 @@ if __name__ == "__main__":
         shuffle=False,
         num_workers=0,
     )
-    # model = get_model(eval_config["model_type"], num_class=num_class)
+    # model = get_model(generate_config["model_type"], num_class=num_class)
     model.load_state_dict(state_dict)
     model.eval()
 
@@ -193,7 +193,7 @@ if __name__ == "__main__":
         
         genreated_batch = model.generate(input_batch)
         # genreated_batch["output"] = data_dict["combined_combined_poses"].reshape(1, 430, 156).to(DEVICE)
-        if eval_config["model_type"] == "CVAE3E3D":
+        if generate_config["model_type"] == "CVAE3E3D":
             whole_sequences = []
             for phase in PHASES:
                 model_output = genreated_batch[f"{phase}_output"]
@@ -205,7 +205,7 @@ if __name__ == "__main__":
                 phase_output = model_output.reshape(batch_size, -1, num_joints, feat_dim).cpu().detach()
                 whole_sequences.append(phase_output)
             whole_sequences = torch.concat(whole_sequences, axis=1)
-        elif eval_config["model_type"] == "CVAE3E1D" or eval_config["model_type"] == "CVAE1E1D":
+        elif generate_config["model_type"] == "CVAE3E1D" or generate_config["model_type"] == "CVAE1E1D":
             whole_sequences = genreated_batch["combined_output"]
             whole_sequences = whole_sequences
             # remove padding
@@ -239,12 +239,12 @@ if __name__ == "__main__":
         )
 
         # save the dataframe
-        df.to_csv(Path(eval_config['output_path']) / f"{idx}_sequences.csv")
+        df.to_csv(Path(generate_config['output_path']) / f"{idx}_sequences.csv")
         # visulization
         frames = visulize_poses(df)
         # save frames
-        imageio.mimsave(Path(eval_config['output_path']) / f"{idx}_sequences.gif", frames, fps=30)
-        if idx == eval_config["num_to_gen"] - 1:
+        imageio.mimsave(Path(generate_config['output_path']) / f"{idx}_sequences.gif", frames, fps=30)
+        if idx == generate_config["num_to_gen"] - 1:
             break
 
-    print(f"Generated {eval_config['num_to_gen']} sequences and saved them to {eval_config['output_path']}")
+    print(f"Generated {generate_config['num_to_gen']} sequences and saved them to {generate_config['output_path']}")
