@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
-
+import argparse, yaml
+from pathlib import Path
+from src.dataloader import FallingDataset1Phase
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # adapted from action2motion to take inputs of different lengths
 class MotionDiscriminator(nn.Module):
@@ -59,75 +62,45 @@ class MotionDiscriminatorForFID(MotionDiscriminator):
         lin1 = self.linear1(out)
         lin1 = torch.tanh(lin1)
         return lin1
+    
 
+def get_model_and_dataset(args):
+    dataset = FallingDataset1Phase(
+    args["data_config"]["data_path"], data_aug=True, max_frame_dict=args["constant"]["max_frame_dict"]
+    )
+    data_configs = {"combined": dataset[0]["combined_label"].size(0)}
+    print(f"Number of classes: {data_configs}")
+    num_frames, num_joints, feat_dim = dataset[0]["combined_combined_poses"].size()
+    print(f"Input size: {num_frames, num_joints, feat_dim}")
+    data_configs.update(
+        {"num_frames": num_frames, "num_joints": num_joints, "feat_dim": feat_dim}
+    )
+    print(f'Output size: {data_configs["combined"]}')
+    model = MotionDiscriminator(data_configs["feat_dim"], hidden_size=256, hidden_layer=2, device=DEVICE, output_size=data_configs["combined"]).to(DEVICE)
+    return model, dataset
 
-# classifier_model_files = {
-#     "ntu13": "models/actionrecognition/ntu13_gru.tar",
-#     "humanact12": "models/actionrecognition/humanact12_gru.tar",
-# }
+def train_evaluation_model(args):
+    """
+    train a simple GRU model to evaluate the performance of the model
+    """
 
+    model, dataset = get_model_and_dataset(args)
 
-# def load_classifier(dataset_type, input_size_raw, num_classes, device):
-#     model = torch.load(classifier_model_files[dataset_type], map_location=device)
-#     classifier = MotionDiscriminator(input_size_raw, 128, 2, device=device, output_size=num_classes).to(device)
-#     classifier.load_state_dict(model["model"])
-#     classifier.eval()
-#     return classifier
-
-
-# def load_classifier_for_fid(dataset_type, input_size_raw, num_classes, device):
-#     model = torch.load(classifier_model_files[dataset_type], map_location=device)
-#     classifier = MotionDiscriminatorForFID(input_size_raw, 128, 2, device=device, output_size=num_classes).to(device)
-#     classifier.load_state_dict(model["model"])
-#     classifier.eval()
-#     return classifier
-
-
-# def test():
-#     from src.datasets.ntu13 import NTU13
-#     import src.utils.fixseed  # noqa
-
-#     classifier = load_classifier("ntu13", input_size_raw=54, num_classes=13, device="cuda").eval()
-#     params = {"pose_rep": "rot6d",
-#               "translation": True,
-#               "glob": True,
-#               "jointstype": "a2m",
-#               "vertstrans": True,
-#               "num_frames": 60,
-#               "sampling": "conseq",
-#               "sampling_step": 1}
-#     dataset = NTU13(**params)
-
-#     from src.models.rotation2xyz import Rotation2xyz
-#     rot2xyz = Rotation2xyz(device="cuda")
-#     confusion_xyz = torch.zeros(13, 13, dtype=torch.long)
-#     confusion = torch.zeros(13, 13, dtype=torch.long)
-
-#     for i in range(1000):
-#         dataset.pose_rep = "xyz"
-#         data = dataset[i][0].to("cuda")
-#         data = data[None]
-
-#         dataset.pose_rep = params["pose_rep"]
-#         x = dataset[i][0].to("cuda")[None]
-#         mask = torch.ones(1, x.shape[-1], dtype=bool, device="cuda")
-#         lengths = mask.sum(1)
-
-#         xyz_t = rot2xyz(x, mask, **params)
-
-#         predicted_cls_xyz = classifier(data, lengths=lengths).argmax().item()
-#         predicted_cls = classifier(xyz_t, lengths=lengths).argmax().item()
-
-#         gt_cls = dataset[i][1]
-
-#         confusion_xyz[gt_cls][predicted_cls_xyz] += 1
-#         confusion[gt_cls][predicted_cls] += 1
-
-#     accuracy_xyz = torch.trace(confusion_xyz)/torch.sum(confusion_xyz).item()
-#     accuracy = torch.trace(confusion)/torch.sum(confusion).item()
-
-#     print(f"accuracy: {accuracy:.1%}, accuracy_xyz: {accuracy_xyz:.1%}")
-
+def parse_args():
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Training script")
+    parser.add_argument(
+        "--config_path",
+        type=str,
+        default=Path(__file__).parent.joinpath("config.yaml"),
+        help="path to config file",
+    )
+    cmd_args = parser.parse_args()
+    # load config file
+    with open(cmd_args.config_path, "r") as f:
+        args = yaml.load(f, Loader=yaml.FullLoader)
+    return args
 
 if __name__ == "__main__":
-    test()
+    args = parse_args()
+    train_evaluation_model(args)
