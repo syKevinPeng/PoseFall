@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from evaluate_models import load_classifier, load_classifier_for_fid
+from src.evaluate.recognition_models import load_classifier, load_classifier_for_fid
 from metric import calculate_fid, calculate_accuracy, calculate_diversity_multimodality
 
 

@@ -1,8 +1,11 @@
+from matplotlib.pylab import f
 import torch
 import torch.nn as nn
 import argparse, yaml
+from tqdm import tqdm
 from pathlib import Path
-from src.dataloader import FallingDataset1Phase
+from ..dataloader import FallingDataset1Phase
+from .stgcn import STGCN
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # adapted from action2motion to take inputs of different lengths
@@ -65,6 +68,7 @@ class MotionDiscriminatorForFID(MotionDiscriminator):
     
 
 def get_model_and_dataset(args):
+    # TODO creat train and test split
     dataset = FallingDataset1Phase(
     args["data_config"]["data_path"], data_aug=True, max_frame_dict=args["constant"]["max_frame_dict"]
     )
@@ -76,15 +80,37 @@ def get_model_and_dataset(args):
         {"num_frames": num_frames, "num_joints": num_joints, "feat_dim": feat_dim}
     )
     print(f'Output size: {data_configs["combined"]}')
-    model = MotionDiscriminator(data_configs["feat_dim"], hidden_size=256, hidden_layer=2, device=DEVICE, output_size=data_configs["combined"]).to(DEVICE)
+
+    # load STGCN model
+    model = STGCN(in_channels=feat_dim, 
+                  num_class=data_configs["combined"], 
+                  graph_args={"layout": "smpl", "strategy": "spatial"},
+                  edge_importance_weighting=True, 
+                  device=DEVICE).to(DEVICE)
+    # model = MotionDiscriminator(data_configs["feat_dim"], hidden_size=256, hidden_layer=2, device=DEVICE, output_size=data_configs["combined"]).to(DEVICE)
     return model, dataset
 
 def train_evaluation_model(args):
     """
     train a simple GRU model to evaluate the performance of the model
     """
-
+    recognition_config = args["recognition_config"]
     model, dataset = get_model_and_dataset(args)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=recognition_config["batch_size"], shuffle=True, num_workers=4)
+
+    # TODO load pretrain weights
+
+    # training setup
+    optimizer = torch.optim.AdamW(model.parameters(), lr=recognition_config["lr"])
+
+    for epoch in range(recognition_config["epochs"]):
+        epoch_loss = 0
+        for i_batch, data_dict in tqdm(enumerate(dataloader)):
+            optimizer.zero_grad()
+            print(f'Input size: {data_dict["combined_combined_poses"].size()}')
+            batch_output = model(data_dict["combined_combined_poses"].to(DEVICE))
+
+    print(f'reaches here')
 
 def parse_args():
     # Parse command-line arguments
@@ -92,7 +118,7 @@ def parse_args():
     parser.add_argument(
         "--config_path",
         type=str,
-        default=Path(__file__).parent.joinpath("config.yaml"),
+        default=Path(__file__).parent.parent.joinpath("config.yaml"),
         help="path to config file",
     )
     cmd_args = parser.parse_args()

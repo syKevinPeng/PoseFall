@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import Dataset
 from pathlib import Path
 import pandas as pd
-from data_processing.utils import euler_angles_to_matrix, matrix_to_rotation_6d
+from .data_processing.utils import euler_angles_to_matrix, matrix_to_rotation_6d
 import numpy as np
 from icecream import ic
 
