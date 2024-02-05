@@ -281,3 +281,4 @@ src/gen_results1E1D/blender_outputs/7_sequences.png
 src/gen_results1E1D/blender_outputs/8_sequences.png
 src/gen_results1E1D/blender_outputs/9_sequences.png
 src/gen_results*
+src/model/pretrained_models/recognition/uestc_rot6d_stgcn.tar
