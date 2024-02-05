@@ -25,12 +25,21 @@ class FallingDataset3Phase(Dataset):
     """
 
     def __init__(
-        self, data_path, max_frame_dict, data_aug=True, sampling_every_n_frames=2, phase = ["impa", "glit", "fall"]
+        self, data_path, max_frame_dict, data_aug=True, sampling_every_n_frames=2, phase = ["impa", "glit", "fall"], split="all"
     ):
         if not Path(data_path).exists():
             raise FileNotFoundError(f"{data_path} does not exist")
         # find all csv files in the directory using pathlib
         self.data_path = sorted([f for f in Path(data_path).glob("Trial_*.csv")])
+        if split == "train":
+            self.data_path = self.data_path[: int(len(self.data_path) * 0.7)]
+        elif split == "val":
+            self.data_path = self.data_path[int(len(self.data_path) * 0.7):]
+        elif split == "all":
+            pass
+        else:
+            raise ValueError(f"split {split} is not supported")
+        print(f'Loading {split} split')
         self.label_path = Path(data_path) / "label.csv"
         if not self.label_path.exists():
             raise FileNotFoundError(f"{self.label_path} does not exist")
@@ -190,9 +199,9 @@ class FallingDataset1Phase(FallingDataset3Phase):
     "For single phase data loading"
 
     def __init__(
-        self, data_path, max_frame_dict, data_aug=True, sampling_every_n_frames=2, padding=True
+        self, data_path, max_frame_dict, data_aug=True, sampling_every_n_frames=2, padding=True, split = "all"
     ):
-        super().__init__(data_path, data_aug, sampling_every_n_frames)
+        super().__init__(data_path, data_aug, sampling_every_n_frames, split=split)
         self.phase = "combined"
         self.data_aug = data_aug
         self.sampling_every_n_frames = sampling_every_n_frames

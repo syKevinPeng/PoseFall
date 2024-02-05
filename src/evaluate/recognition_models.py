@@ -1,3 +1,4 @@
+import pathlib
 import attr
 from matplotlib.pylab import f
 import torch
@@ -7,6 +8,7 @@ from tqdm import tqdm
 from pathlib import Path
 from ..dataloader import FallingDataset1Phase
 from .stgcn import STGCN
+import wandb
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # adapted from action2motion to take inputs of different lengths
@@ -71,7 +73,7 @@ class MotionDiscriminatorForFID(MotionDiscriminator):
 def get_model_and_dataloader(args):
     # TODO creat train and test split
     dataset = FallingDataset1Phase(
-    args["data_config"]["data_path"], data_aug=True, max_frame_dict=args["constant"]["max_frame_dict"]
+    args["data_config"]["data_path"], data_aug=True, max_frame_dict=args["constant"]["max_frame_dict"], split="train"
     )
     data_configs = {"combined": dataset[0]["combined_label"].size(0)}
     num_frames, num_joints, feat_dim = dataset[0]["combined_combined_poses"].size()
@@ -94,6 +96,9 @@ def train_evaluation_model(args):
     """
     train a simple GRU model to evaluate the performance of the model
     """
+    output_dir = Path(args["recognition_config"]["output_path"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
     recognition_config = args["recognition_config"]
     model, dataloader, attr_size = get_model_and_dataloader(args)
 
@@ -128,6 +133,13 @@ def train_evaluation_model(args):
                 else:
                     cum_loss_dict[key] += loss_dict[key]
         print(f"Epoch {epoch} loss: {epoch_loss}. Loss dict: {loss_dict}")
+        wandb.log({"epoch_loss": epoch_loss})
+        for key in loss_dict.keys():
+            wandb.log({f"epoch_{key}": loss_dict[key]})
+        
+        if (epoch+1) % recognition_config["model_save_freq"] == 0:
+            torch.save(model.state_dict(), output_dir/f"recognition_model_{epoch}.pt")
+
 
 def parse_args():
     # Parse command-line arguments
@@ -146,4 +158,15 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
+    wandb_config = args["recognition_config"]["wandb_config"]
+    # prepare wandb
+    wandb.init(
+        project="posefall_recognition",
+        config=args,
+        mode=wandb_config["wandb_mode"],
+        tags=wandb_config["wandb_tags"],
+        name="recognition_training",
+        notes="training recognition model with GT data",
+    )
+
     train_evaluation_model(args)

@@ -1,126 +1,104 @@
 import torch
 import numpy as np
-from tqdm import tqdm
-from metric import calculate_fid, calculate_accuracy 
-from torch.utils.data import DataLoader
-import os
+from .metric import calculate_accuracy, calculate_diversity_multimodality
+from .stgcn import STGCN
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+class Evaluation:
+    def __init__(self, dataname, parameters, device, seed=None):
+        model = STGCN(in_channels=parameters["nfeats"],
+                      num_class=parameters["num_classes"],
+                      graph_args={"layout": "smpl", "strategy": "spatial"},
+                      edge_importance_weighting=True,
+                      device=DEVICE)
 
-class NewDataloader:
-    def __init__(self, mode, model, dataiterator, device):
-        assert mode in ["gen", "rc", "gt"]
-        self.batches = []
+        model = model.to(parameters["device"])
+
+        modelpath = "models/actionrecognition/uestc_rot6d_stgcn.tar"
+
+        state_dict = torch.load(modelpath, map_location=parameters["device"])
+        model.load_state_dict(state_dict)
+        model.eval()
+
+        self.num_classes = parameters["num_classes"]
+        self.model = model
+
+        self.dataname = dataname
+        self.device = device
+
+        self.seed = seed
+
+    def compute_features(self, model, motionloader):
+        # calculate_activations_labels function from action2motion
+        activations = []
+        labels = []
         with torch.no_grad():
-            for databatch in tqdm(dataiterator, desc=f"Construct dataloader: {mode}.."):
-                if mode == "gen":
-                    classes = databatch["y"]
-                    gendurations = databatch["lengths"]
-                    batch = model.generate(classes, gendurations)
-                    batch = {key: val.to(device) for key, val in batch.items()}
-                elif mode == "gt":
-                    batch = {key: val.to(device) for key, val in databatch.items()}
-                    batch["x_xyz"] = model.rot2xyz(batch["x"].to(device),
-                                                   batch["mask"].to(device))
-                    batch["output"] = batch["x"]
-                    batch["output_xyz"] = batch["x_xyz"]
-                elif mode == "rc":
-                    databatch = {key: val.to(device) for key, val in databatch.items()}
-                    batch = model(databatch)
-                    batch["output_xyz"] = model.rot2xyz(batch["output"],
-                                                        batch["mask"])
-                    batch["x_xyz"] = model.rot2xyz(batch["x"],
-                                                   batch["mask"])
+            for idx, batch in enumerate(motionloader):
+                activations.append(self.model(batch)["features"])
+                labels.append(batch["y"])
+            activations = torch.cat(activations, dim=0)
+            labels = torch.cat(labels, dim=0)
+        return activations, labels
 
-                self.batches.append(batch)
+    @staticmethod
+    def calculate_activation_statistics(activations):
+        activations = activations.cpu().numpy()
+        mu = np.mean(activations, axis=0)
+        sigma = np.cov(activations, rowvar=False)
+        return mu, sigma
 
-    def __iter__(self):
-        return iter(self.batches)
+    def evaluate(self, model, loaders):
+        def print_logs(metric, key):
+            print(f"Computing stgcn {metric} on the {key} loader ...")
 
+        metrics_all = {}
+        for sets in ["train", "test"]:
+            computedfeats = {}
+            metrics = {}
+            for key, loaderSets in loaders.items():
+                loader = loaderSets[sets]
 
-def evaluate(parameters, folder, checkpointname, epoch, niter):
-    num_frames = 60
+                metric = "accuracy"
+                print_logs(metric, key)
+                mkey = f"{metric}_{key}"
+                metrics[mkey], _ = calculate_accuracy(model, loader,
+                                                      self.num_classes,
+                                                      self.model, self.device)
+                # features for diversity
+                print_logs("features", key)
+                feats, labels = self.compute_features(model, loader)
+                print_logs("stats", key)
+                stats = self.calculate_activation_statistics(feats)
 
-    # fix parameters for action2motion evaluation
-    parameters["num_frames"] = num_frames
-    if parameters["dataset"] == "ntu13":
-        parameters["jointstype"] = "a2m"
-        parameters["vertstrans"] = False  # No "real" translation in this dataset
-    elif parameters["dataset"] == "humanact12":
-        parameters["jointstype"] = "smpl"
-        parameters["vertstrans"] = True
-    else:
-        raise NotImplementedError("Not in this file.")
+                computedfeats[key] = {"feats": feats,
+                                      "labels": labels,
+                                      "stats": stats}
 
-    device = parameters["device"]
-    dataname = parameters["dataset"]
+                print_logs("diversity", key)
+                ret = calculate_diversity_multimodality(feats, labels, self.num_classes,
+                                                        seed=self.seed)
+                metrics[f"diversity_{key}"], metrics[f"multimodality_{key}"] = ret
 
-    # dummy => update parameters info
-    get_datasets(parameters)
-    model = get_gen_model(parameters)
+            # taking the stats of the ground truth and remove it from the computed feats
+            gtstats = computedfeats["gt"]["stats"]
+            # computing fid
+            for key, loader in computedfeats.items():
+                metric = "fid"
+                mkey = f"{metric}_{key}"
 
-    print("Restore weights..")
-    checkpointpath = os.path.join(folder, checkpointname)
-    state_dict = torch.load(checkpointpath, map_location=device)
-    model.load_state_dict(state_dict)
-    model.eval()
-    model.outputxyz = True
+                stats = computedfeats[key]["stats"]
+                metrics[mkey] = float(calculate_fid(gtstats, stats))
 
-    a2mevaluation = A2MEvaluation(dataname, device)
-    a2mmetrics = {}
+            metrics_all[sets] = metrics
 
-    # evaluation = OtherMetricsEvaluation(device)
-    # joints_metrics = {}, pose_metrics = {}
-
-    datasetGT1 = get_datasets(parameters)["train"]
-    datasetGT2 = get_datasets(parameters)["train"]
-
-    allseeds = list(range(niter))
-
-    try:
-        for index, seed in enumerate(allseeds):
-            print(f"Evaluation number: {index+1}/{niter}")
-            fixseed(seed)
-
-            datasetGT1.reset_shuffle()
-            datasetGT1.shuffle()
-
-            datasetGT2.reset_shuffle()
-            datasetGT2.shuffle()
-
-            dataiterator = DataLoader(datasetGT1, batch_size=parameters["batch_size"],
-                                      shuffle=False, num_workers=8, collate_fn=collate)
-            dataiterator2 = DataLoader(datasetGT2, batch_size=parameters["batch_size"],
-                                       shuffle=False, num_workers=8, collate_fn=collate)
-
-            # reconstructedloader = NewDataloader("rc", model, dataiterator, device)
-            motionloader = NewDataloader("gen", model, dataiterator, device)
-            gt_motionloader = NewDataloader("gt", model, dataiterator, device)
-            gt_motionloader2 = NewDataloader("gt", model, dataiterator2, device)
-
-            # Action2motionEvaluation
-            loaders = {"gen": motionloader,
-                       # "recons": reconstructedloader,
-                       "gt": gt_motionloader,
-                       "gt2": gt_motionloader2}
-
-            a2mmetrics[seed] = a2mevaluation.evaluate(model, loaders)
-
-            # joints_metrics[seed] = evaluation.evaluate(model, num_classes,
-            # loaders, xyz=True)
-            # pose_metrics[seed] = evaluation.evaluate(model, num_classes,
-            # loaders, xyz=False)
-
-    except KeyboardInterrupt:
-        string = "Saving the evaluation before exiting.."
-        print(string)
-
-    metrics = {"feats": {key: [format_metrics(a2mmetrics[seed])[key] for seed in a2mmetrics.keys()] for key in a2mmetrics[allseeds[0]]}}
-    # "xyz": {key: [format_metrics(joints_metrics[seed])[key] for seed in allseeds] for key in joints_metrics[allseeds[0]]},
-    # model.pose_rep: {key: [format_metrics(pose_metrics[seed])[key] for seed in allseeds] for key in pose_metrics[allseeds[0]]}}
-
-    epoch = checkpointname.split("_")[1].split(".")[0]
-    metricname = "evaluation_metrics_{}_all.yaml".format(epoch)
-
-    evalpath = os.path.join(folder, metricname)
-    print(f"Saving evaluation: {evalpath}")
-    save_metrics(evalpath, metrics)
+        metrics = {}
+        for sets in ["train", "test"]:
+            for key in metrics_all[sets]:
+                metrics[f"{key}_{sets}"] = metrics_all[sets][key]
+        return metrics
+    
+if __name__ == "__main__":
+    Dataset = {"train": None, "test": None}
+    
+    evaluation = Evaluation("uestc", parameters, DEVICE)
+    print(evaluation.evaluate(evaluation.model, {"gt": None, "generated": None}))
