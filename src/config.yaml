@@ -54,7 +54,7 @@ generate_config:
     wandb_description:  "Vanilla CVAE: With no data aug. Pretrained weights of uestc on Encoder and decoder."
 
 recognition_config:
-  ckpt_path: ""
+  pretrained_weights: "/home/siyuan/research/PoseFall/src/model/pretrained_models/recognition/uestc_rot6d_stgcn.tar"
   epochs: 1000
   batch_size: 32
   lr: 0.0001

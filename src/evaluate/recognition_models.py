@@ -98,7 +98,12 @@ def train_evaluation_model(args):
     model, dataloader, attr_size = get_model_and_dataloader(args)
 
     # TODO load pretrain weights
-
+    state_dict = torch.load(recognition_config["pretrained_weights"], map_location=DEVICE)
+    # remove unwanted keys
+    kets_to_remove = ["fcn.weight", "fcn.bias"]
+    for key in kets_to_remove:
+        state_dict.pop(key, None)
+    model.load_state_dict(state_dict, strict=False)
     # training setup
     optimizer = torch.optim.AdamW(model.parameters(), lr=recognition_config["lr"])
 
