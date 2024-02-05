@@ -67,19 +67,18 @@ class MotionDiscriminatorForFID(MotionDiscriminator):
         return lin1
     
 
-def get_model_and_dataset(args):
+def get_model_and_dataloader(args):
     # TODO creat train and test split
     dataset = FallingDataset1Phase(
     args["data_config"]["data_path"], data_aug=True, max_frame_dict=args["constant"]["max_frame_dict"]
     )
     data_configs = {"combined": dataset[0]["combined_label"].size(0)}
-    print(f"Number of classes: {data_configs}")
     num_frames, num_joints, feat_dim = dataset[0]["combined_combined_poses"].size()
-    print(f"Input size: {num_frames, num_joints, feat_dim}")
     data_configs.update(
         {"num_frames": num_frames, "num_joints": num_joints, "feat_dim": feat_dim}
     )
     print(f'Output size: {data_configs["combined"]}')
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=args["recognition_config"]["batch_size"], shuffle=True, num_workers=4)
 
     # load STGCN model
     model = STGCN(in_channels=feat_dim, 
@@ -88,15 +87,14 @@ def get_model_and_dataset(args):
                   edge_importance_weighting=True, 
                   device=DEVICE).to(DEVICE)
     # model = MotionDiscriminator(data_configs["feat_dim"], hidden_size=256, hidden_layer=2, device=DEVICE, output_size=data_configs["combined"]).to(DEVICE)
-    return model, dataset
+    return model, dataloader
 
 def train_evaluation_model(args):
     """
     train a simple GRU model to evaluate the performance of the model
     """
     recognition_config = args["recognition_config"]
-    model, dataset = get_model_and_dataset(args)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=recognition_config["batch_size"], shuffle=True, num_workers=4)
+    model, dataloader = get_model_and_dataloader(args)
 
     # TODO load pretrain weights
 
@@ -105,11 +103,24 @@ def train_evaluation_model(args):
 
     for epoch in range(recognition_config["epochs"]):
         epoch_loss = 0
+        cum_loss_dict = {}
         for i_batch, data_dict in tqdm(enumerate(dataloader)):
             optimizer.zero_grad()
-            print(f'Input size: {data_dict["combined_combined_poses"].size()}')
-            batch_output = model(data_dict["combined_combined_poses"].to(DEVICE))
-
+            # input_shape:  Batch, Num Joints, Angle Rep (6), Time
+            x = data_dict["combined_combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :]
+            input_dict = {"x": x.to(DEVICE),
+                          "y": data_dict["combined_label"].to(DEVICE)}
+            batch_output = model(input_dict)
+            loss, loss_dict = model.compute_loss(batch_output)
+            loss.backward()
+            optimizer.step()
+            epoch_loss += loss.item()
+            for key in loss_dict.keys():
+                if key not in cum_loss_dict.keys():
+                    cum_loss_dict[key] = loss_dict[key]
+                else:
+                    cum_loss_dict[key] += loss_dict[key]
+        print(f"Epoch {epoch} loss: {epoch_loss}")
     print(f'reaches here')
 
 def parse_args():

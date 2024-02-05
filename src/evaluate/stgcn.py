@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 from .stgcnutils.tgcn import ConvTemporalGraphical
 from .stgcnutils.graph import Graph
-
+from sklearn.metrics import accuracy_score
 __all__ = ["STGCN"]
 
 
@@ -112,18 +112,18 @@ class STGCN(nn.Module):
         return batch
 
     def compute_accuracy(self, batch):
-        confusion = torch.zeros(self.num_class, self.num_class, dtype=int)
-        yhat = batch["yhat"].max(dim=1).indices
-        ygt = batch["y"]
-        for label, pred in zip(ygt, yhat):
-            confusion[label][pred] += 1
-        accuracy = torch.trace(confusion)/torch.sum(confusion)
-        return accuracy
+        # confusion = torch.zeros(self.num_class, self.num_class, dtype=int).to(self.device)
+        # yhat = batch["yhat"].max(dim=1).indices
+        # ygt = batch["y"]
+        # for label, pred in zip(ygt, yhat):
+        #     confusion[label][pred] += 1
+        # accuracy = torch.trace(confusion)/torch.sum(confusion)
+        # return accuracy
+        return accuracy_score(batch["y"].cpu().numpy(), batch["yhat"].detach().cpu().numpy())
     
     def compute_loss(self, batch):
         cross_entropy = self.criterion(batch["yhat"], batch["y"])
         mixed_loss = cross_entropy
-        
         acc = self.compute_accuracy(batch)
         losses = {"cross_entropy": cross_entropy.item(),
                   "mixed": mixed_loss.item(),
