@@ -2,18 +2,18 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from pathlib import Path
-from dataloader import FallingDataset3Phase, FallingDataset1Phase
-from model.CVAE3E3D import CVAE3E3D
-from model.CVAE3E1D import CVAE3E1D
-from model.CVAE1E1D import CVAE1E1D
+from .dataloader import FallingDataset3Phase, FallingDataset1Phase
+from .model.CVAE3E3D import CVAE3E3D
+from .model.CVAE3E1D import CVAE3E1D
+from .model.CVAE1E1D import CVAE1E1D
 from icecream import ic
 import pandas as pd
-from data_processing.utils import (
+from .data_processing.utils import (
     parse_output,
     rotation_6d_to_matrix,
     matrix_to_euler_angles,
 )
-from data_processing import joint_names
+from .data_processing import joint_names
 import argparse
 from src.visulization.torch3d_vis import visulize_poses
 import imageio
@@ -130,7 +130,7 @@ def get_model_and_dataset(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Training script")
     parser.add_argument(
-        "--config_path", type=str, default="config.yaml", help="path to config file"
+        "--config_path", type=str, default="src/config.yaml", help="path to config file"
     )
     cmd_args = parser.parse_args()
     # load config file
@@ -184,67 +184,68 @@ if __name__ == "__main__":
                 "fall_mask": data_dict["fall_src_key_padding_mask"].to(DEVICE),
             }
             batch_size = input_batch["impa_label"].size(0)
+            label = torch.concatenate([data_dict["impa_label"], data_dict["glit_label"], data_dict["fall_label"]], axis=0)
         elif input_type == "combined":
             input_batch = {
                 "combined_label": data_dict["combined_label"].to(DEVICE),
                 "combined_mask": data_dict["combined_src_key_padding_mask"].to(DEVICE),
             }
             batch_size = input_batch["combined_label"].size(0)
-        
-        genreated_batch = model.generate(input_batch)
-        # genreated_batch["output"] = data_dict["combined_combined_poses"].reshape(1, 430, 156).to(DEVICE)
-        if generate_config["model_type"] == "CVAE3E3D":
-            whole_sequences = []
-            for phase in PHASES:
-                model_output = genreated_batch[f"{phase}_output"]
-                model_output = model_output
-                batch_size = model_output.size(0)
+            label = data_dict["combined_label"]
+        label_str = "".join([str(int(i)) for i in label[0].cpu().numpy()])
+        for i in range(generate_config["num_to_gen"]):
+            genreated_batch = model.generate(input_batch)
+            # genreated_batch["output"] = data_dict["combined_combined_poses"].reshape(1, 430, 156).to(DEVICE)
+            if generate_config["model_type"] == "CVAE3E3D":
+                whole_sequences = []
+                for phase in PHASES:
+                    model_output = genreated_batch[f"{phase}_output"]
+                    model_output = model_output
+                    batch_size = model_output.size(0)
+                    # remove padding
+                    model_output = model_output[~(input_batch[f"{phase}_mask"].bool())]
+                    num_fram, num_joints, feat_dim = model_output.size()
+                    phase_output = model_output.reshape(batch_size, -1, num_joints, feat_dim).cpu().detach()
+                    whole_sequences.append(phase_output)
+                whole_sequences = torch.concat(whole_sequences, axis=1)
+            elif generate_config["model_type"] == "CVAE3E1D" or generate_config["model_type"] == "CVAE1E1D":
+                whole_sequences = genreated_batch["combined_output"]
+                whole_sequences = whole_sequences
                 # remove padding
-                model_output = model_output[~(input_batch[f"{phase}_mask"].bool())]
-                num_fram, num_joints, feat_dim = model_output.size()
-                phase_output = model_output.reshape(batch_size, -1, num_joints, feat_dim).cpu().detach()
-                whole_sequences.append(phase_output)
-            whole_sequences = torch.concat(whole_sequences, axis=1)
-        elif generate_config["model_type"] == "CVAE3E1D" or generate_config["model_type"] == "CVAE1E1D":
-            whole_sequences = genreated_batch["combined_output"]
-            whole_sequences = whole_sequences
-            # remove padding
-            batch_size, num_fram, num_joints, feat_dim = whole_sequences.size()
-            whole_sequences = whole_sequences[~(input_batch["combined_mask"].bool())]
-            whole_sequences = whole_sequences.reshape(batch_size, -1, num_joints, feat_dim).cpu().detach()
+                batch_size, num_fram, num_joints, feat_dim = whole_sequences.size()
+                whole_sequences = whole_sequences[~(input_batch["combined_mask"].bool())]
+                whole_sequences = whole_sequences.reshape(batch_size, -1, num_joints, feat_dim).cpu().detach()
 
 
-        # parse the output
-        parsed_seequnces = parse_output(whole_sequences)
-        # convert the rotation to rotation matrix
-        bone_rot = rotation_6d_to_matrix(parsed_seequnces["bone_rot"])
-        # convert the rotation matrix to euler angle
-        bone_rot = matrix_to_euler_angles(bone_rot, "XYZ")
-        # flatten the bone rot
-        bone_rot = bone_rot.reshape(bone_rot.size(0), bone_rot.size(1), -1)
-        arm_rot = rotation_6d_to_matrix(parsed_seequnces["arm_rot"])
-        arm_rot = matrix_to_euler_angles(arm_rot, "XYZ")
-        arm_loc = parsed_seequnces["arm_loc"]
-        # form the output as a dataframe
-        joint_name = joint_names.SMPL_JOINT_NAMES
-        joint_name = np.array(
-            [[f"{name}_x", f"{name}_y", f"{name}_z"] for name in joint_name]
-        ).flatten()
-        # get the first item in the batch
-        data = torch.concatenate([arm_rot, arm_loc, bone_rot], axis=2)[0]
-        col_names = ["arm_rot_x", "arm_rot_y", "arm_rot_z"] + ["arm_loc_x", "arm_loc_y", "arm_loc_z"]+ list(joint_name)
-        df = pd.DataFrame(
-            data=data,
-            columns= col_names,
-        )
+            # parse the output
+            parsed_seequnces = parse_output(whole_sequences)
+            # convert the rotation to rotation matrix
+            bone_rot = rotation_6d_to_matrix(parsed_seequnces["bone_rot"])
+            # convert the rotation matrix to euler angle
+            bone_rot = matrix_to_euler_angles(bone_rot, "XYZ")
+            # flatten the bone rot
+            bone_rot = bone_rot.reshape(bone_rot.size(0), bone_rot.size(1), -1)
+            arm_rot = rotation_6d_to_matrix(parsed_seequnces["arm_rot"])
+            arm_rot = matrix_to_euler_angles(arm_rot, "XYZ")
+            arm_loc = parsed_seequnces["arm_loc"]
+            # form the output as a dataframe
+            joint_name = joint_names.SMPL_JOINT_NAMES
+            joint_name = np.array(
+                [[f"{name}_x", f"{name}_y", f"{name}_z"] for name in joint_name]
+            ).flatten()
+            # get the first item in the batch
+            data = torch.concatenate([arm_rot, arm_loc, bone_rot], axis=2)[0]
+            col_names = ["arm_rot_x", "arm_rot_y", "arm_rot_z"] + ["arm_loc_x", "arm_loc_y", "arm_loc_z"]+ list(joint_name)
+            df = pd.DataFrame(
+                data=data,
+                columns= col_names,
+            )
 
-        # save the dataframe
-        df.to_csv(Path(generate_config['output_path']) / f"{idx}_sequences.csv")
-        # visulization
-        frames = visulize_poses(df)
-        # save frames
-        imageio.mimsave(Path(generate_config['output_path']) / f"{idx}_sequences.gif", frames, fps=30)
-        if idx == generate_config["num_to_gen"] - 1:
-            break
+            # save the dataframe
+            df.to_csv(Path(generate_config['output_path']) / f"{label_str}_sequences_{i}.csv")
+            # visulization
+            # frames = visulize_poses(df)
+            # save frames
+            # imageio.mimsave(Path(generate_config['output_path']) / f"{i}_sequences.gif", frames, fps=30)
 
-    print(f"Generated {generate_config['num_to_gen']} sequences and saved them to {generate_config['output_path']}")
+    print(f"Generated {generate_config['num_to_gen']} sequences for all the dataset and saved them to {generate_config['output_path']}")

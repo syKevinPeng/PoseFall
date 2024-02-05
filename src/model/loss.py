@@ -1,6 +1,6 @@
 from smplx import SMPLLayer
 import torch.nn as nn
-from data_processing.utils import rotation_6d_to_matrix
+from ..data_processing.utils import rotation_6d_to_matrix
 import torch
 import torch.nn.functional as F
 import scipy

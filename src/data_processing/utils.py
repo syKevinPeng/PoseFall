@@ -197,8 +197,6 @@ def parse_output(sequences):
     """
     batch_size, seq_len, num_joints, feature_dim = sequences.size()
     sequences = sequences.reshape(batch_size, seq_len, -1, 6)
-    print(f'num_joints: {num_joints}')
-    print(f'sequences shape: {sequences.shape}')
     if num_joints == 25: 
         # meanning bone rots + body locs
         arm_loc = sequences[:, :, -1, :3]
