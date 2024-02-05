@@ -1,3 +1,4 @@
+import attr
 from matplotlib.pylab import f
 import torch
 import torch.nn as nn
@@ -79,7 +80,7 @@ def get_model_and_dataloader(args):
     )
     print(f'Output size: {data_configs["combined"]}')
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=args["recognition_config"]["batch_size"], shuffle=True, num_workers=4)
-
+    attr_size = dataset.get_attr_size()
     # load STGCN model
     model = STGCN(in_channels=feat_dim, 
                   num_class=data_configs["combined"], 
@@ -87,14 +88,14 @@ def get_model_and_dataloader(args):
                   edge_importance_weighting=True, 
                   device=DEVICE).to(DEVICE)
     # model = MotionDiscriminator(data_configs["feat_dim"], hidden_size=256, hidden_layer=2, device=DEVICE, output_size=data_configs["combined"]).to(DEVICE)
-    return model, dataloader
+    return model, dataloader, attr_size
 
 def train_evaluation_model(args):
     """
     train a simple GRU model to evaluate the performance of the model
     """
     recognition_config = args["recognition_config"]
-    model, dataloader = get_model_and_dataloader(args)
+    model, dataloader, attr_size = get_model_and_dataloader(args)
 
     # TODO load pretrain weights
 
@@ -109,7 +110,8 @@ def train_evaluation_model(args):
             # input_shape:  Batch, Num Joints, Angle Rep (6), Time
             x = data_dict["combined_combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :]
             input_dict = {"x": x.to(DEVICE),
-                          "y": data_dict["combined_label"].to(DEVICE)}
+                          "y": data_dict["combined_label"].to(DEVICE),
+                          "attribute_size": attr_size}
             batch_output = model(input_dict)
             loss, loss_dict = model.compute_loss(batch_output)
             loss.backward()
@@ -120,8 +122,7 @@ def train_evaluation_model(args):
                     cum_loss_dict[key] = loss_dict[key]
                 else:
                     cum_loss_dict[key] += loss_dict[key]
-        print(f"Epoch {epoch} loss: {epoch_loss}")
-    print(f'reaches here')
+        print(f"Epoch {epoch} loss: {epoch_loss}. Loss dict: {loss_dict}")
 
 def parse_args():
     # Parse command-line arguments

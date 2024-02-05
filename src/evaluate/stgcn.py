@@ -1,3 +1,4 @@
+import attr
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -34,7 +35,6 @@ class STGCN(nn.Module):
         self.num_class = num_class
         
         self.losses = ["accuracy", "cross_entropy", "mixed"]
-        self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
 
         # load graph
         self.graph = Graph(**graph_args)
@@ -119,16 +119,34 @@ class STGCN(nn.Module):
         #     confusion[label][pred] += 1
         # accuracy = torch.trace(confusion)/torch.sum(confusion)
         # return accuracy
-        return accuracy_score(batch["y"].cpu().numpy(), batch["yhat"].detach().cpu().numpy())
+        return 0
+    
+    def compute_hamming_score(self, batch):
+        # apply sigmoid to yhat
+        yhat = torch.sigmoid(batch["yhat"]).round()
+        ygt = batch["y"]
+        # calculate how many elements are equal
+        hamming = torch.sum(yhat == ygt).item()
+        return hamming/len(ygt)
+    
+    def compute_exact_match(self, batch):
+        attr_size = batch["attribute_size"]
+        yhat = torch.sigmoid(batch["yhat"]).round()
+        ygt = batch["y"]
+        return accuracy_score(ygt.cpu().numpy(), yhat.detach().cpu().numpy())
+
+    
     
     def compute_loss(self, batch):
-        cross_entropy = self.criterion(batch["yhat"], batch["y"])
-        mixed_loss = cross_entropy
-        acc = self.compute_accuracy(batch)
-        losses = {"cross_entropy": cross_entropy.item(),
-                  "mixed": mixed_loss.item(),
-                  "accuracy": acc.item()}
-        return mixed_loss, losses
+        criterion = nn.BCEWithLogitsLoss()
+        attr_size = batch["attribute_size"]
+        loss = criterion(batch["yhat"], batch["y"])
+        humming_acc = self.compute_hamming_score(batch)
+        exact_match_acc = self.compute_exact_match(batch)
+        loss_dict = {"loss": loss.item(),
+                  "hamming_accuracy": humming_acc,
+                  "exact_match_accuracy": exact_match_acc}
+        return loss, loss_dict
 
 
 class st_gcn(nn.Module):

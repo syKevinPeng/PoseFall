@@ -209,18 +209,15 @@ class FallingDataset1Phase(FallingDataset3Phase):
             for col in self.label_col
             if att.startswith(col)
         ]
+
+        self.label_class_length = [cls.split("_")[0] for cls in col_names]
+        from collections import Counter
+        self.label_class_length = [count for count in Counter(self.label_class_length).values()]
+        
         self.onehot_label_df = self.label[["Trial Number"]+col_names]
-        # if not self.onehot_label:
-        #     self.category_label_df = self.onehot_label_df[['Trial Number']]
-        #     mapping_dict = {}
-        #     for attr in self.label_col:
-        #         # select the column that contains the attribute
-        #         attr_col = self.onehot_label_df.columns[self.onehot_label_df.columns.str.startswith(attr)]
-        #         # convert one-hot label to label
-        #         converted_col = pd.Categorical(self.onehot_label_df[attr_col].idxmax(axis=1))
-        #         mapping_dict[attr] = dict(enumerate(converted_col.categories))
-        #         self.category_label_df.loc[:,attr] = converted_col.codes.tolist()
-        #     print(f'mapping_dict: {mapping_dict}')
+
+    def get_attr_size(self):
+        return self.label_class_length
 
 
     def __getitem__(self, idx):
