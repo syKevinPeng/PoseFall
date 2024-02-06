@@ -53,6 +53,13 @@ generate_config:
     wandb_tags: [*eval_model_type, 'eval']
     wandb_description:  "Vanilla CVAE: With no data aug. Pretrained weights of uestc on Encoder and decoder."
 
+evaluate_config:
+  ckpt_path: ""
+  evaluate_dataset_path: "/home/siyuan/research/PoseFall/gen_results_1E1D"
+
+  wandb_config:
+    wandb_mode:
+
 recognition_config:
   pretrained_weights: "/home/siyuan/research/PoseFall/src/model/pretrained_models/recognition/uestc_rot6d_stgcn.tar"
   output_path: "./src/evaluate/recognition_ckpts"

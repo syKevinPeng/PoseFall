@@ -1,6 +1,4 @@
-from copy import deepcopy
 from random import randint
-from matplotlib.pylab import f
 import torch
 from torch.utils.data import Dataset
 from pathlib import Path
@@ -25,7 +23,13 @@ class FallingDataset3Phase(Dataset):
     """
 
     def __init__(
-        self, data_path, max_frame_dict, data_aug=True, sampling_every_n_frames=2, phase = ["impa", "glit", "fall"], split="all"
+        self,
+        data_path,
+        max_frame_dict,
+        data_aug=True,
+        sampling_every_n_frames=2,
+        phase=["impa", "glit", "fall"],
+        split="all",
     ):
         if not Path(data_path).exists():
             raise FileNotFoundError(f"{data_path} does not exist")
@@ -34,12 +38,12 @@ class FallingDataset3Phase(Dataset):
         if split == "train":
             self.data_path = self.data_path[: int(len(self.data_path) * 0.7)]
         elif split == "val":
-            self.data_path = self.data_path[int(len(self.data_path) * 0.7):]
+            self.data_path = self.data_path[int(len(self.data_path) * 0.7) :]
         elif split == "all":
             pass
         else:
             raise ValueError(f"split {split} is not supported")
-        print(f'Loading {split} split')
+        print(f"Loading {split} split")
         self.label_path = Path(data_path) / "label.csv"
         if not self.label_path.exists():
             raise FileNotFoundError(f"{self.label_path} does not exist")
@@ -199,7 +203,13 @@ class FallingDataset1Phase(FallingDataset3Phase):
     "For single phase data loading"
 
     def __init__(
-        self, data_path, max_frame_dict, data_aug=True, sampling_every_n_frames=2, padding=True, split = "all"
+        self,
+        data_path,
+        max_frame_dict,
+        data_aug=True,
+        sampling_every_n_frames=2,
+        padding=True,
+        split="all",
     ):
         super().__init__(data_path, data_aug, sampling_every_n_frames, split=split)
         self.phase = "combined"
@@ -209,7 +219,9 @@ class FallingDataset1Phase(FallingDataset3Phase):
         self.padding = padding
         # self.onehot_label = onehot_label
 
-        self.label_col = np.concatenate([impact_phase_att, glitch_phase_att, fall_phase_att])
+        self.label_col = np.concatenate(
+            [impact_phase_att, glitch_phase_att, fall_phase_att]
+        )
         # print(f'label_col: {label_col}')
 
         col_names = [
@@ -221,13 +233,15 @@ class FallingDataset1Phase(FallingDataset3Phase):
 
         self.label_class_length = [cls.split("_")[0] for cls in col_names]
         from collections import Counter
-        self.label_class_length = [count for count in Counter(self.label_class_length).values()]
-        
-        self.onehot_label_df = self.label[["Trial Number"]+col_names]
+
+        self.label_class_length = [
+            count for count in Counter(self.label_class_length).values()
+        ]
+
+        self.onehot_label_df = self.label[["Trial Number"] + col_names]
 
     def get_attr_size(self):
         return self.label_class_length
-
 
     def __getitem__(self, idx):
         path = self.data_path[idx]
@@ -249,7 +263,11 @@ class FallingDataset1Phase(FallingDataset3Phase):
         data = pd.DataFrame(data=augmented_data, columns=data.columns[1:-1])
 
         # if self.onehot_label:
-        label = self.onehot_label_df[self.onehot_label_df["Trial Number"] == trial_number].iloc[:, 1:].values.squeeze()
+        label = (
+            self.onehot_label_df[self.onehot_label_df["Trial Number"] == trial_number]
+            .iloc[:, 1:]
+            .values.squeeze()
+        )
         # else:
         #     label = self.category_label_df[self.category_label_df["Trial Number"] == trial_number].iloc[:, 1:].values.squeeze()
         data_dict = {
@@ -316,15 +334,19 @@ class FallingDataset1Phase(FallingDataset3Phase):
             raise ValueError(f"src_key_padding_mask is all ones, please check")
         data_dict[f"{self.phase}_src_key_padding_mask"] = src_key_padding_mask
         return data_dict
-    
+
     def collate_fn(self, batch):
         """
         Collate function for the dataset
         """
-        combined_poses = torch.stack([item[f"{self.phase}_combined_poses"] for item in batch])
-        src_key_padding_mask = torch.stack([item[f"{self.phase}_src_key_padding_mask"] for item in batch])
+        combined_poses = torch.stack(
+            [item[f"{self.phase}_combined_poses"] for item in batch]
+        )
+        src_key_padding_mask = torch.stack(
+            [item[f"{self.phase}_src_key_padding_mask"] for item in batch]
+        )
         labels = torch.stack([item[f"{self.phase}_label"] for item in batch])
-        print(f'combined_poses: {combined_poses.size()}')
+        print(f"combined_poses: {combined_poses.size()}")
         return {
             f"{self.phase}_combined_poses": combined_poses,
             f"{self.phase}_src_key_padding_mask": src_key_padding_mask,

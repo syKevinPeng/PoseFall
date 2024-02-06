@@ -205,7 +205,7 @@ src/visulization/viz_output/example.gif
 src/visulization/smpl.png
 src/visulization/viz_output/example.gif
 src/gen_results*
-./gen_results*
+gen_results*
 src/model/pretrained_models/recognition/uestc_rot6d_stgcn.tar
 
 src/evaluate/recognition_ckpts/*
