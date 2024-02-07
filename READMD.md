@@ -8,3 +8,9 @@ Modify in the config.yaml file the following parameters:
 Run the following command in the root directory of the project:
 ```bash
 python -m scr.generate_imgs
+```
+
+### Evaluate
+```bash
+python -m src.evaluate.evaluate
+```

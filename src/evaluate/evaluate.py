@@ -1,34 +1,38 @@
-import torch
+import torch, argparse, yaml
+from pathlib import Path
 import numpy as np
-from .metric import calculate_accuracy, calculate_diversity_multimodality
+
+from src.evaluate import recognition_models
+from .metric import calculate_accuracy, calculate_diversity_multimodality, calculate_fid
 from .stgcn import STGCN
+from .evaluate_dataloader import EvaluateDataset
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class Evaluation:
-    def __init__(self, dataname, parameters, device, seed=None):
-        model = STGCN(in_channels=parameters["nfeats"],
-                      num_class=parameters["num_classes"],
+    def __init__(self, num_class, recognition_model_ckpt, device, seed=None):
+        model = STGCN(in_channels=6,
+                      num_class=num_class,
                       graph_args={"layout": "smpl", "strategy": "spatial"},
                       edge_importance_weighting=True,
                       device=DEVICE)
 
-        model = model.to(parameters["device"])
+        model = model.to(device)
 
-        modelpath = "models/actionrecognition/uestc_rot6d_stgcn.tar"
-
-        state_dict = torch.load(modelpath, map_location=parameters["device"])
+        modelpath = Path(recognition_model_ckpt)
+        if not modelpath.is_file():
+            raise ValueError(f"{modelpath} is not a file.")
+        
+        state_dict = torch.load(modelpath, map_location=DEVICE)
         model.load_state_dict(state_dict)
         model.eval()
 
-        self.num_classes = parameters["num_classes"]
+        self.num_classes = num_class
         self.model = model
-
-        self.dataname = dataname
         self.device = device
 
         self.seed = seed
 
-    def compute_features(self, model, motionloader):
+    def compute_features(self, motionloader):
         # calculate_activations_labels function from action2motion
         activations = []
         labels = []
@@ -47,58 +51,67 @@ class Evaluation:
         sigma = np.cov(activations, rowvar=False)
         return mu, sigma
 
-    def evaluate(self, model, loaders):
+    def evaluate(self, loaders):
         def print_logs(metric, key):
             print(f"Computing stgcn {metric} on the {key} loader ...")
 
-        metrics_all = {}
-        for sets in ["train", "test"]:
-            computedfeats = {}
-            metrics = {}
-            for key, loaderSets in loaders.items():
-                loader = loaderSets[sets]
-
-                metric = "accuracy"
-                print_logs(metric, key)
-                mkey = f"{metric}_{key}"
-                metrics[mkey], _ = calculate_accuracy(model, loader,
-                                                      self.num_classes,
-                                                      self.model, self.device)
-                # features for diversity
-                print_logs("features", key)
-                feats, labels = self.compute_features(model, loader)
-                print_logs("stats", key)
-                stats = self.calculate_activation_statistics(feats)
-
-                computedfeats[key] = {"feats": feats,
-                                      "labels": labels,
-                                      "stats": stats}
-
-                print_logs("diversity", key)
-                ret = calculate_diversity_multimodality(feats, labels, self.num_classes,
-                                                        seed=self.seed)
-                metrics[f"diversity_{key}"], metrics[f"multimodality_{key}"] = ret
-
-            # taking the stats of the ground truth and remove it from the computed feats
-            gtstats = computedfeats["gt"]["stats"]
-            # computing fid
-            for key, loader in computedfeats.items():
-                metric = "fid"
-                mkey = f"{metric}_{key}"
-
-                stats = computedfeats[key]["stats"]
-                metrics[mkey] = float(calculate_fid(gtstats, stats))
-
-            metrics_all[sets] = metrics
-
+        computedfeats = {}
         metrics = {}
-        for sets in ["train", "test"]:
-            for key in metrics_all[sets]:
-                metrics[f"{key}_{sets}"] = metrics_all[sets][key]
+
+        metric = "accuracy"
+        print_logs(metric, key)
+        mkey = f"{metric}_{key}"
+        metrics[mkey], _ = calculate_accuracy(self.model, loader,
+                                                self.num_classes,
+                                                self.model, self.device)
+        # features for diversity
+        print_logs("features", key)
+        feats, labels = self.compute_features(self.model, loader)
+        print_logs("stats", key)
+        stats = self.calculate_activation_statistics(feats)
+
+        computedfeats[key] = {"feats": feats,
+                                "labels": labels,
+                                "stats": stats}
+
+        print_logs("diversity", key)
+        ret = calculate_diversity_multimodality(feats, labels, self.num_classes,
+                                                seed=self.seed)
+        metrics[f"diversity_{key}"], metrics[f"multimodality_{key}"] = ret
+
+        # taking the stats of the ground truth and remove it from the computed feats
+        gtstats = computedfeats["gt"]["stats"]
+        # computing fid
+        for key, loader in computedfeats.items():
+            metric = "fid"
+            mkey = f"{metric}_{key}"
+
+            stats = computedfeats[key]["stats"]
+            metrics[mkey] = float(calculate_fid(gtstats, stats))
+
         return metrics
     
+def parse_args():
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Training script")
+    parser.add_argument(
+        "--config_path",
+        type=str,
+        default=Path(__file__).parent.parent.joinpath("config.yaml"),
+        help="path to config file",
+    )
+    cmd_args = parser.parse_args()
+    # load config file
+    with open(cmd_args.config_path, "r") as f:
+        args = yaml.load(f, Loader=yaml.FullLoader)
+    return args
+
 if __name__ == "__main__":
-    Dataset = {"train": None, "test": None}
-    
-    evaluation = Evaluation("uestc", parameters, DEVICE)
-    print(evaluation.evaluate(evaluation.model, {"gt": None, "generated": None}))
+    args = parse_args()
+    max_frame_dict = args["constant"]["max_frame_dict"]
+    dataset = EvaluateDataset(args, args["evaluate_config"]["evaluate_dataset_path"], max_frame_dict=max_frame_dict)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=False, num_workers=4)
+    num_class = len(dataset[0]["label"])
+    recognition_models_ckpt = args["evaluate_config"]["recognition_model_ckpt_path"]
+    evaluation = Evaluation(num_class=num_class, device=DEVICE)
+    metrics = evaluation.evaluate(dataloader)
