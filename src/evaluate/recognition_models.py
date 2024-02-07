@@ -102,7 +102,7 @@ def train_evaluation_model(args):
     recognition_config = args["recognition_config"]
     model, dataloader, attr_size = get_model_and_dataloader(args)
 
-    # TODO load pretrain weights
+    # load pretrain weights
     state_dict = torch.load(recognition_config["pretrained_weights"], map_location=DEVICE)
     # remove unwanted keys
     kets_to_remove = ["fcn.weight", "fcn.bias"]

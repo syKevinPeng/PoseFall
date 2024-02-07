@@ -90,6 +90,20 @@ def calculate_accuracy(model, motion_loader, num_labels, classifier, device):
 import torch
 import numpy as np
 
+def compute_hamming_score(self, batch):
+    # apply sigmoid to yhat
+    yhat = torch.sigmoid(batch["yhat"]).round()
+    ygt = batch["y"]
+    # calculate how many elements are equal
+    hamming = torch.sum(yhat == ygt).item()
+    return hamming/len(ygt)
+
+def compute_exact_match(self, batch):
+    attr_size = batch["attribute_size"]
+    yhat = torch.sigmoid(batch["yhat"]).round()
+    ygt = batch["y"]
+    return accuracy_score(ygt.cpu().numpy(), yhat.detach().cpu().numpy())
+
 
 # from action2motion
 def calculate_diversity_multimodality(activations, labels, num_labels):

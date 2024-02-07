@@ -51,30 +51,36 @@ class Evaluation:
         sigma = np.cov(activations, rowvar=False)
         return mu, sigma
 
-    def evaluate(self, loaders):
-        def print_logs(metric, key):
-            print(f"Computing stgcn {metric} on the {key} loader ...")
+    def evaluate(self, dataloader):
 
         computedfeats = {}
         metrics = {}
+        humming_score_list= []
+        total_label_item = 0
+        with torch.no_grad():
+            for batch in dataloader:
+                x = batch["combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :].to(DEVICE)
+                label = batch["label"].to(DEVICE)
+                input_dict = {
+                    "x": x,
+                    "y": label,
+                    "attribute_size": self.num_classes
+                }
+                pred = self.model(input_dict)["yhat"]
+                pred = torch.sigmoid(pred).round()
+                humming_score = torch.sum(pred == label).item()
+                humming_score_list.append(humming_score)
+                total_label_item += label.size(0)*label.size(1)
+        
+        metrics["humming_score"] = sum(humming_score_list)/total_label_item
 
-        metric = "accuracy"
-        print_logs(metric, key)
-        mkey = f"{metric}_{key}"
-        metrics[mkey], _ = calculate_accuracy(self.model, loader,
-                                                self.num_classes,
-                                                self.model, self.device)
         # features for diversity
-        print_logs("features", key)
         feats, labels = self.compute_features(self.model, loader)
-        print_logs("stats", key)
         stats = self.calculate_activation_statistics(feats)
 
         computedfeats[key] = {"feats": feats,
                                 "labels": labels,
                                 "stats": stats}
-
-        print_logs("diversity", key)
         ret = calculate_diversity_multimodality(feats, labels, self.num_classes,
                                                 seed=self.seed)
         metrics[f"diversity_{key}"], metrics[f"multimodality_{key}"] = ret
@@ -110,8 +116,9 @@ if __name__ == "__main__":
     args = parse_args()
     max_frame_dict = args["constant"]["max_frame_dict"]
     dataset = EvaluateDataset(args, args["evaluate_config"]["evaluate_dataset_path"], max_frame_dict=max_frame_dict)
+    print(f'Evaluating on dataset with {len(dataset)} samples.')
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=False, num_workers=4)
     num_class = len(dataset[0]["label"])
     recognition_models_ckpt = args["evaluate_config"]["recognition_model_ckpt_path"]
-    evaluation = Evaluation(num_class=num_class, device=DEVICE)
+    evaluation = Evaluation(num_class=num_class, recognition_model_ckpt= recognition_models_ckpt, device=DEVICE)
     metrics = evaluation.evaluate(dataloader)

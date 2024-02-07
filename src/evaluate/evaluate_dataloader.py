@@ -32,11 +32,10 @@ class EvaluateDataset(Dataset):
 
     def __getitem__(self, idx):
         path = self.data_list[idx]
-        label = path.stem.split("_")[0]
-        data_dict = {"label": label}
+        label = [int(i) for i in path.stem.split("_")[0]]
+        data_dict = {"label": torch.tensor(label)}
         # read csv file
         data = pd.read_csv(path)
-        print(data.head())
         arm_rot = torch.tensor(data[["arm_rot_x", "arm_rot_y", "arm_rot_z"]].values)
         # euler angles to rotation matrix
         arm_rot = euler_angles_to_matrix(arm_rot, "XYZ")

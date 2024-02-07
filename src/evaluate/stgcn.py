@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 from .stgcnutils.tgcn import ConvTemporalGraphical
 from .stgcnutils.graph import Graph
-from sklearn.metrics import accuracy_score
+from .metric import compute_hamming_score, compute_exact_match
 __all__ = ["STGCN"]
 
 
@@ -111,38 +111,22 @@ class STGCN(nn.Module):
         batch["yhat"] = x
         return batch
 
-    def compute_accuracy(self, batch):
-        # confusion = torch.zeros(self.num_class, self.num_class, dtype=int).to(self.device)
-        # yhat = batch["yhat"].max(dim=1).indices
-        # ygt = batch["y"]
-        # for label, pred in zip(ygt, yhat):
-        #     confusion[label][pred] += 1
-        # accuracy = torch.trace(confusion)/torch.sum(confusion)
-        # return accuracy
-        return 0
-    
-    def compute_hamming_score(self, batch):
-        # apply sigmoid to yhat
-        yhat = torch.sigmoid(batch["yhat"]).round()
-        ygt = batch["y"]
-        # calculate how many elements are equal
-        hamming = torch.sum(yhat == ygt).item()
-        return hamming/len(ygt)
-    
-    def compute_exact_match(self, batch):
-        attr_size = batch["attribute_size"]
-        yhat = torch.sigmoid(batch["yhat"]).round()
-        ygt = batch["y"]
-        return accuracy_score(ygt.cpu().numpy(), yhat.detach().cpu().numpy())
-
-    
-    
+    # def compute_accuracy(self, batch):
+    #     # confusion = torch.zeros(self.num_class, self.num_class, dtype=int).to(self.device)
+    #     # yhat = batch["yhat"].max(dim=1).indices
+    #     # ygt = batch["y"]
+    #     # for label, pred in zip(ygt, yhat):
+    #     #     confusion[label][pred] += 1
+    #     # accuracy = torch.trace(confusion)/torch.sum(confusion)
+    #     # return accuracy
+    #     return 0
+        
     def compute_loss(self, batch):
         criterion = nn.BCEWithLogitsLoss()
         attr_size = batch["attribute_size"]
         loss = criterion(batch["yhat"], batch["y"])
-        humming_acc = self.compute_hamming_score(batch)
-        exact_match_acc = self.compute_exact_match(batch)
+        humming_acc = compute_hamming_score(batch)
+        exact_match_acc = compute_exact_match(batch)
         loss_dict = {"loss": loss.item(),
                   "hamming_accuracy": humming_acc,
                   "exact_match_accuracy": exact_match_acc}
