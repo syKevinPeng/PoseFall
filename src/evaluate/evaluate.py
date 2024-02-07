@@ -57,6 +57,9 @@ class Evaluation:
         metrics = {}
         humming_score_list= []
         total_label_item = 0
+
+        activations = []
+        labels = []
         with torch.no_grad():
             for batch in dataloader:
                 x = batch["combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :].to(DEVICE)
@@ -66,26 +69,33 @@ class Evaluation:
                     "y": label,
                     "attribute_size": self.num_classes
                 }
-                pred = self.model(input_dict)["yhat"]
-                pred = torch.sigmoid(pred).round()
-                humming_score = torch.sum(pred == label).item()
+                output = self.model(input_dict)
+                pred = output["yhat"]
+                binarized_pred = torch.sigmoid(pred).round()
+                humming_score = torch.sum(binarized_pred == label).item()
+                features = output["features"]
+                activations.append(features)
+                labels.append(label)
+
                 humming_score_list.append(humming_score)
                 total_label_item += label.size(0)*label.size(1)
         
         metrics["humming_score"] = sum(humming_score_list)/total_label_item
+        activations = torch.cat(activations, dim=0)
+        labels = torch.cat(labels, dim=0)
 
         # features for diversity
-        feats, labels = self.compute_features(self.model, loader)
-        stats = self.calculate_activation_statistics(feats)
+        stats = self.calculate_activation_statistics(activations)
 
-        computedfeats[key] = {"feats": feats,
-                                "labels": labels,
-                                "stats": stats}
-        ret = calculate_diversity_multimodality(feats, labels, self.num_classes,
-                                                seed=self.seed)
-        metrics[f"diversity_{key}"], metrics[f"multimodality_{key}"] = ret
+        # computedfeats[key] = {"feats": activations,
+        #                         "labels": labels,
+        #                         "stats": stats}
+        # ret = calculate_diversity_multimodality(feats, labels, self.num_classes,
+        #                                         seed=self.seed)
+        # metrics[f"diversity_{key}"], metrics[f"multimodality_{key}"] = ret
 
         # taking the stats of the ground truth and remove it from the computed feats
+        TODO: calculate_fid
         gtstats = computedfeats["gt"]["stats"]
         # computing fid
         for key, loader in computedfeats.items():
