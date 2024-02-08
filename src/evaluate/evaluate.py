@@ -81,6 +81,8 @@ class Evaluation:
                 total_label_item += label.size(0)*label.size(1)
         
         metrics["humming_score"] = sum(humming_score_list)/total_label_item
+        print(f'Humming score: {metrics["humming_score"]}')
+        exit()
         activations = torch.cat(activations, dim=0)
         labels = torch.cat(labels, dim=0)
 

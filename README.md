@@ -7,7 +7,7 @@ Modify in the config.yaml file the following parameters:
 
 Run the following command in the root directory of the project:
 ```bash
-python -m scr.generate_imgs
+python -m src.generate_imgs
 ```
 
 ### Evaluate

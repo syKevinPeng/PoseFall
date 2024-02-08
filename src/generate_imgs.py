@@ -184,7 +184,10 @@ if __name__ == "__main__":
                 "fall_mask": data_dict["fall_src_key_padding_mask"].to(DEVICE),
             }
             batch_size = input_batch["impa_label"].size(0)
-            label = torch.concatenate([data_dict["impa_label"], data_dict["glit_label"], data_dict["fall_label"]], axis=0)
+            # print(f"impa_label: {input_batch['impa_label'].size()}")
+            # print(f"glit_label: {input_batch['glit_label'].size()}")
+            # print(f"fall_label: {input_batch['fall_label'].size()}")
+            label = torch.concatenate([data_dict["impa_label"], data_dict["glit_label"], data_dict["fall_label"]], axis=1)
         elif input_type == "combined":
             input_batch = {
                 "combined_label": data_dict["combined_label"].to(DEVICE),
