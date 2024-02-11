@@ -106,13 +106,16 @@ def compute_exact_match(self, batch):
 
 
 # from action2motion
-def calculate_diversity_multimodality(activations, labels, num_labels):
+def calculate_diversity(activations, labels, num_labels, seed=None):
     diversity_times = 200
     multimodality_times = 20
-    labels = labels.long()
+    labels = labels.astype(np.longfloat)
     num_motions = len(labels)
 
     diversity = 0
+
+    if seed is not None:
+        np.random.seed(seed)
         
     first_indices = np.random.randint(0, num_motions, diversity_times)
     second_indices = np.random.randint(0, num_motions, diversity_times)
@@ -121,28 +124,29 @@ def calculate_diversity_multimodality(activations, labels, num_labels):
                                 activations[second_idx, :])
     diversity /= diversity_times
 
-    multimodality = 0
-    label_quotas = np.repeat(multimodality_times, num_labels)
-    while np.any(label_quotas > 0):
-        # print(label_quotas)
-        first_idx = np.random.randint(0, num_motions)
-        first_label = labels[first_idx]
-        if not label_quotas[first_label]:
-            continue
+    # multimodality = 0
+    # label_quotas = np.repeat(multimodality_times, num_labels)
+    # while np.any(label_quotas > 0):
+    #     # print(label_quotas)
+    #     first_idx = np.random.randint(0, num_motions)
+    #     first_label = labels[first_idx]
+    #     print(f'first label: {first_label}')
+    #     if not label_quotas[first_label]:
+    #         continue
 
-        second_idx = np.random.randint(0, num_motions)
-        second_label = labels[second_idx]
-        while first_label != second_label:
-            second_idx = np.random.randint(0, num_motions)
-            second_label = labels[second_idx]
+    #     second_idx = np.random.randint(0, num_motions)
+    #     second_label = labels[second_idx]
+    #     while first_label != second_label:
+    #         second_idx = np.random.randint(0, num_motions)
+    #         second_label = labels[second_idx]
 
-        label_quotas[first_label] -= 1
+    #     label_quotas[first_label] -= 1
 
-        first_activation = activations[first_idx, :]
-        second_activation = activations[second_idx, :]
-        multimodality += torch.dist(first_activation,
-                                    second_activation)
+    #     first_activation = activations[first_idx, :]
+    #     second_activation = activations[second_idx, :]
+    #     multimodality += torch.dist(first_activation,
+    #                                 second_activation)
 
-    multimodality /= (multimodality_times * num_labels)
+    # multimodality /= (multimodality_times * num_labels)
 
-    return diversity.item(), multimodality.item()
+    return diversity.item()#, multimodality.item()

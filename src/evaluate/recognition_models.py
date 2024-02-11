@@ -146,6 +146,7 @@ def train_evaluation_model(args, ):
         args["data_config"]["data_path"], data_aug=True, max_frame_dict=args["constant"]["max_frame_dict"], split="eval"
     )
     humming_score_list = []
+    total_label_item = 0
     with torch.no_grad():
         for batch in evaluate_dataset:
             x = batch["combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :].to(DEVICE)

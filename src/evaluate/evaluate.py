@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 
 from src.evaluate import recognition_models
-from .metric import calculate_accuracy, calculate_diversity_multimodality, calculate_fid
+from .metric import calculate_accuracy, calculate_diversity, calculate_fid
 from .stgcn import STGCN
 from .evaluate_dataloader import EvaluateDataset
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -76,24 +76,24 @@ class Evaluation:
                 features = output["features"]
                 activations.append(features)
                 labels.append(label)
-
                 humming_score_list.append(humming_score)
                 total_label_item += label.size(0)*label.size(1)
         
         metrics["humming_score"] = sum(humming_score_list)/total_label_item
         print(f'Humming score: {metrics["humming_score"]}')
-        exit()
         activations = torch.cat(activations, dim=0)
         labels = torch.cat(labels, dim=0)
 
         # features for diversity
         stats = self.calculate_activation_statistics(activations)
-
         # computedfeats[key] = {"feats": activations,
         #                         "labels": labels,
         #                         "stats": stats}
-        # ret = calculate_diversity_multimodality(feats, labels, self.num_classes,
-        #                                         seed=self.seed)
+        labels = labels.cpu().numpy()
+        diversity = calculate_diversity(activations, labels, self.num_classes,
+                                                 seed=self.seed)
+        print(f'Diversity: {diversity}')
+        exit()
         # metrics[f"diversity_{key}"], metrics[f"multimodality_{key}"] = ret
 
         # taking the stats of the ground truth and remove it from the computed feats
