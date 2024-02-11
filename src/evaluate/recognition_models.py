@@ -145,6 +145,7 @@ def train_evaluation_model(args, ):
     evaluate_dataset = FallingDataset1Phase(
         args["data_config"]["data_path"], data_aug=True, max_frame_dict=args["constant"]["max_frame_dict"], split="eval"
     )
+    humming_score_list = []
     with torch.no_grad():
         for batch in evaluate_dataset:
             x = batch["combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :].to(DEVICE)
@@ -158,12 +159,13 @@ def train_evaluation_model(args, ):
             pred = output["yhat"]
             binarized_pred = torch.sigmoid(pred).round()
             humming_score = torch.sum(binarized_pred == label).item()
-            features = output["features"]
-            activations.append(features)
-            labels.append(label)
-
-            humming_score_list.append(humming_score)
             total_label_item += label.size(0)*label.size(1)
+            humming_score_list.append(humming_score)
+
+    humming_score = sum(humming_score_list)/total_label_item
+    print(f'Humming score: {humming_score}')
+    wandb.log({"humming_score": humming_score})
+        
 
 
 def parse_args():
