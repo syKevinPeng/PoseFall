@@ -37,7 +37,7 @@ class FallingDataset3Phase(Dataset):
         self.data_path = sorted([f for f in Path(data_path).glob("Trial_*.csv")])
         if split == "train":
             self.data_path = self.data_path[: int(len(self.data_path) * 0.7)]
-        elif split == "val":
+        elif split == "eval":
             self.data_path = self.data_path[int(len(self.data_path) * 0.7) :]
         elif split == "all":
             pass

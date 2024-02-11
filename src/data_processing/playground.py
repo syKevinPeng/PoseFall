@@ -122,7 +122,7 @@ def main(model_folder,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='SMPL-X Demo')
 
-    parser.add_argument('--model-folder', required=True, type=str,
+    parser.add_argument('--model-folder', default="/home/siyuan/research/PoseFall/data", type=str,
                         help='The path to the model folder')
     parser.add_argument('--model-type', default='smplx', type=str,
                         choices=['smpl', 'smplh', 'smplx', 'mano', 'flame'],

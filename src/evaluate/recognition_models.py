@@ -83,16 +83,17 @@ def get_model_and_dataloader(args):
     print(f'Output size: {data_configs["combined"]}')
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=args["recognition_config"]["batch_size"], shuffle=True, num_workers=4)
     attr_size = dataset.get_attr_size()
+    num_class = data_configs["combined"]
     # load STGCN model
     model = STGCN(in_channels=feat_dim, 
-                  num_class=data_configs["combined"], 
+                  num_class=num_class,
                   graph_args={"layout": "smpl", "strategy": "spatial"},
                   edge_importance_weighting=True, 
                   device=DEVICE).to(DEVICE)
     # model = MotionDiscriminator(data_configs["feat_dim"], hidden_size=256, hidden_layer=2, device=DEVICE, output_size=data_configs["combined"]).to(DEVICE)
-    return model, dataloader, attr_size
+    return model, dataloader, attr_size, num_class
 
-def train_evaluation_model(args):
+def train_evaluation_model(args, ):
     """
     train a simple GRU model to evaluate the performance of the model
     """
@@ -100,7 +101,7 @@ def train_evaluation_model(args):
     output_dir.mkdir(parents=True, exist_ok=True)
     
     recognition_config = args["recognition_config"]
-    model, dataloader, attr_size = get_model_and_dataloader(args)
+    model, dataloader, attr_size, num_class = get_model_and_dataloader(args)
 
     # load pretrain weights
     state_dict = torch.load(recognition_config["pretrained_weights"], map_location=DEVICE)
@@ -139,6 +140,30 @@ def train_evaluation_model(args):
         
         if (epoch+1) % recognition_config["model_save_freq"] == 0:
             torch.save(model.state_dict(), output_dir/f"recognition_model_{epoch}.pt")
+
+    # evaluate the model
+    evaluate_dataset = FallingDataset1Phase(
+        args["data_config"]["data_path"], data_aug=True, max_frame_dict=args["constant"]["max_frame_dict"], split="eval"
+    )
+    with torch.no_grad():
+        for batch in evaluate_dataset:
+            x = batch["combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :].to(DEVICE)
+            label = batch["label"].to(DEVICE)
+            input_dict = {
+                "x": x,
+                "y": label,
+                "attribute_size": num_class
+            }
+            output = model(input_dict)
+            pred = output["yhat"]
+            binarized_pred = torch.sigmoid(pred).round()
+            humming_score = torch.sum(binarized_pred == label).item()
+            features = output["features"]
+            activations.append(features)
+            labels.append(label)
+
+            humming_score_list.append(humming_score)
+            total_label_item += label.size(0)*label.size(1)
 
 
 def parse_args():
