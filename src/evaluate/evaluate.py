@@ -6,6 +6,7 @@ from src.evaluate import recognition_models
 from .metric import calculate_accuracy, calculate_diversity, calculate_fid
 from .stgcn import STGCN
 from .evaluate_dataloader import EvaluateDataset
+from ..dataloader import FallingDataset1Phase
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class Evaluation:
@@ -51,7 +52,7 @@ class Evaluation:
         sigma = np.cov(activations, rowvar=False)
         return mu, sigma
 
-    def evaluate(self, dataloader):
+    def evaluate(self, eval_dataloader, GT_dataloader):
 
         computedfeats = {}
         metrics = {}
@@ -61,7 +62,7 @@ class Evaluation:
         activations = []
         labels = []
         with torch.no_grad():
-            for batch in dataloader:
+            for batch in eval_dataloader:
                 x = batch["combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :].to(DEVICE)
                 label = batch["label"].to(DEVICE)
                 input_dict = {
@@ -86,26 +87,32 @@ class Evaluation:
 
         # features for diversity
         stats = self.calculate_activation_statistics(activations)
-        # computedfeats[key] = {"feats": activations,
-        #                         "labels": labels,
-        #                         "stats": stats}
         labels = labels.cpu().numpy()
         diversity = calculate_diversity(activations, labels, self.num_classes,
                                                  seed=self.seed)
         print(f'Diversity: {diversity}')
-        exit()
-        # metrics[f"diversity_{key}"], metrics[f"multimodality_{key}"] = ret
+        metrics["diversity"] = diversity
 
-        # taking the stats of the ground truth and remove it from the computed feats
-        TODO: calculate_fid
-        gtstats = computedfeats["gt"]["stats"]
-        # computing fid
-        for key, loader in computedfeats.items():
-            metric = "fid"
-            mkey = f"{metric}_{key}"
+        gt_activations = []
+        #run stats on GT data
+        with torch.no_grad():
+            for batch in GT_dataloader:
+                x = batch["combined_combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :].to(DEVICE)
+                label = batch["combined_label"].to(DEVICE)
+                input_dict = {
+                    "x": x,
+                    "y": label,
+                    "attribute_size": self.num_classes
+                }
+                output = self.model(input_dict)
+                features = output["features"]
+                gt_activations.append(features)
 
-            stats = computedfeats[key]["stats"]
-            metrics[mkey] = float(calculate_fid(gtstats, stats))
+        gt_activations = torch.cat(gt_activations, dim=0)
+        gtstats = self.calculate_activation_statistics(gt_activations)
+        fid = calculate_fid(gtstats, stats)
+        print(f'FID: {fid}')
+        metrics["fid"] = fid
 
         return metrics
     
@@ -127,10 +134,14 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     max_frame_dict = args["constant"]["max_frame_dict"]
-    dataset = EvaluateDataset(args, args["evaluate_config"]["evaluate_dataset_path"], max_frame_dict=max_frame_dict)
-    print(f'Evaluating on dataset with {len(dataset)} samples.')
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=False, num_workers=4)
-    num_class = len(dataset[0]["label"])
+    eval_dataset = EvaluateDataset(args, args["evaluate_config"]["evaluate_dataset_path"], max_frame_dict=max_frame_dict)
+    print(f'Evaluating on dataset with {len(eval_dataset)} samples.')
+    eval_dataloader = torch.utils.data.DataLoader(eval_dataset, batch_size=32, shuffle=False, num_workers=4)
+    gt_dataset = dataset = FallingDataset1Phase(
+    args["data_config"]["data_path"], data_aug=True, max_frame_dict=args["constant"]["max_frame_dict"], split="train"
+    )
+    gt_dataloader = torch.utils.data.DataLoader(gt_dataset, batch_size=32, shuffle=False, num_workers=4)
+    num_class = len(eval_dataset[0]["label"])
     recognition_models_ckpt = args["evaluate_config"]["recognition_model_ckpt_path"]
     evaluation = Evaluation(num_class=num_class, recognition_model_ckpt= recognition_models_ckpt, device=DEVICE)
-    metrics = evaluation.evaluate(dataloader)
+    metrics = evaluation.evaluate(eval_dataloader, gt_dataloader)
