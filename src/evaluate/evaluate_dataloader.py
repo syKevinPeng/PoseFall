@@ -17,8 +17,10 @@ class EvaluateDataset(Dataset):
         if not self.data_path.is_dir():
             raise ValueError(f"{self.data_path} is not a directory.")
         
-        self.data_list = list(self.data_path.glob("*.csv"))
-        num_class = len(self.data_list[0].stem.split("_")[0])
+        self.data_list = sorted(list(self.data_path.glob("*.csv")))
+        # print(f'self.data_list: {self.data_list}')
+        # exit()
+        num_class = len(self.data_list[0].stem.split("_")[1])
         print(f"Number of classes: {num_class}")
         self.recognition_model =  STGCN(in_channels=6, 
                   num_class=num_class, 
@@ -32,7 +34,7 @@ class EvaluateDataset(Dataset):
 
     def __getitem__(self, idx):
         path = self.data_list[idx]
-        label = [int(i) for i in path.stem.split("_")[0]]
+        label = [int(i) for i in path.stem.split("_")[1]]
         data_dict = {"label": torch.tensor(label)}
         # read csv file
         data = pd.read_csv(path)

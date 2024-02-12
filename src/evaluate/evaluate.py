@@ -93,6 +93,15 @@ class Evaluation:
         print(f'Diversity: {diversity}')
         metrics["diversity"] = diversity
 
+        if len(eval_dataloader) != len(GT_dataloader):
+            raise ValueError(f'Length of eval dataloader {len(eval_dataloader)} and GT dataloader {len(GT_dataloader)} are not equal.')
+        for i, (eval_batch, GT_batch) in enumerate(zip(eval_dataloader, GT_dataloader)):
+            eval_label = eval_batch["label"].cpu().numpy()
+            GT_label = GT_batch["combined_label"].cpu().numpy().astype(int)
+            if not np.array_equal(eval_label, GT_label):
+                print(f'Eval label: {eval_label}')
+                print(f'GT label: {GT_label}')
+                raise ValueError(f'Labels for eval batch {i} and GT batch {i} are not equal.')
         gt_activations = []
         #run stats on GT data
         with torch.no_grad():
@@ -131,15 +140,29 @@ def parse_args():
         args = yaml.load(f, Loader=yaml.FullLoader)
     return args
 
+class EvalGTDataset(torch.utils.data.Dataset):
+    def __init__(self, args):
+        self.args = args
+        self.num_repeats = args["generate_config"]["num_to_gen"]
+        self.dataset = FallingDataset1Phase(
+        args["data_config"]["data_path"], data_aug=False, max_frame_dict=args["constant"]["max_frame_dict"], split="all")
+        
+
+
+    def __len__(self):
+        return len(self.dataset)*self.num_repeats
+
+    # since generated images are repeated num_repeats times, we need to extend the GT dataset to match the generated dataset
+    def __getitem__(self, idx):
+        return self.dataset[idx // self.num_repeats]
+
 if __name__ == "__main__":
     args = parse_args()
     max_frame_dict = args["constant"]["max_frame_dict"]
     eval_dataset = EvaluateDataset(args, args["evaluate_config"]["evaluate_dataset_path"], max_frame_dict=max_frame_dict)
     print(f'Evaluating on dataset with {len(eval_dataset)} samples.')
     eval_dataloader = torch.utils.data.DataLoader(eval_dataset, batch_size=32, shuffle=False, num_workers=4)
-    gt_dataset = dataset = FallingDataset1Phase(
-    args["data_config"]["data_path"], data_aug=True, max_frame_dict=args["constant"]["max_frame_dict"], split="train"
-    )
+    gt_dataset = EvalGTDataset(args)
     gt_dataloader = torch.utils.data.DataLoader(gt_dataset, batch_size=32, shuffle=False, num_workers=4)
     num_class = len(eval_dataset[0]["label"])
     recognition_models_ckpt = args["evaluate_config"]["recognition_model_ckpt_path"]

@@ -40,12 +40,12 @@ constant:
     fall: 200
 
 generate_config:
-  # ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240109_012926-zjoxy2jq/files/2024-01-09_01-29-27_exp_0/epoch_1999.pth"
-  ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240109_192054-obzeak8j/files/2024-01-09_19-20-55_exp_3/epoch_2999.pth"
+  ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240109_012926-zjoxy2jq/files/2024-01-09_01-29-27_exp_0/epoch_1999.pth"
+  # ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240109_192054-obzeak8j/files/2024-01-09_19-20-55_exp_3/epoch_2999.pth"
   data_path: *data_path
-  output_path: "./gen_results_3E3D"
-  num_to_gen: 5
-  model_type: &eval_model_type 'CVAE3E3D'
+  output_path: "./gen_results_1E1D_20"
+  num_to_gen: 20
+  model_type: &eval_model_type 'CVAE1E1D'
   wandb_config:
     wandb_mode: 'disabled'
     wandb_project: 'posefall'
@@ -65,7 +65,7 @@ recognition_config:
     wandb_tags: ['recognition', 'train']
 
 evaluate_config:
-  evaluate_dataset_path: "/home/siyuan/research/PoseFall/gen_results_1E1D"
+  evaluate_dataset_path: "/home/siyuan/research/PoseFall/gen_results_1E1D_20"
   recognition_model_ckpt_path: "/home/siyuan/research/PoseFall/src/evaluate/recognition_ckpts/recognition_model_2999.pt"
   wandb_config:
     wandb_mode:

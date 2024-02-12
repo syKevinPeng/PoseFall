@@ -245,7 +245,7 @@ if __name__ == "__main__":
             )
 
             # save the dataframe
-            df.to_csv(Path(generate_config['output_path']) / f"{label_str}_sequences_{i}.csv")
+            df.to_csv(Path(generate_config['output_path']) / f"{str(idx).zfill(4)}_{label_str}_sequences_{i}.csv")
             # visulization
             # frames = visulize_poses(df)
             # save frames
