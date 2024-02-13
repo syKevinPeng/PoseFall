@@ -9,11 +9,21 @@ from pathlib import Path
 from ..dataloader import FallingDataset1Phase
 from .stgcn import STGCN
 import wandb
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 # adapted from action2motion to take inputs of different lengths
 class MotionDiscriminator(nn.Module):
-    def __init__(self, input_size, hidden_size, hidden_layer, device, output_size=12, use_noise=None):
+    def __init__(
+        self,
+        input_size,
+        hidden_size,
+        hidden_layer,
+        device,
+        output_size=12,
+        use_noise=None,
+    ):
         super(MotionDiscriminator, self).__init__()
         self.device = device
 
@@ -29,7 +39,7 @@ class MotionDiscriminator(nn.Module):
     def forward(self, motion_sequence, lengths=None, hidden_unit=None):
         # dim (motion_length, num_samples, hidden_size)
         bs, njoints, nfeats, num_frames = motion_sequence.shape
-        motion_sequence = motion_sequence.reshape(bs, njoints*nfeats, num_frames)
+        motion_sequence = motion_sequence.reshape(bs, njoints * nfeats, num_frames)
         motion_sequence = motion_sequence.permute(2, 0, 1)
         if hidden_unit is None:
             # motion_sequence = motion_sequence.permute(1, 0, 2)
@@ -37,7 +47,9 @@ class MotionDiscriminator(nn.Module):
         gru_o, _ = self.recurrent(motion_sequence.float(), hidden_unit)
 
         # select the last valid, instead of: gru_o[-1, :, :]
-        out = gru_o[tuple(torch.stack((lengths-1, torch.arange(bs, device=self.device))))]
+        out = gru_o[
+            tuple(torch.stack((lengths - 1, torch.arange(bs, device=self.device))))
+        ]
 
         # dim (num_samples, 30)
         lin1 = self.linear1(out)
@@ -47,14 +59,20 @@ class MotionDiscriminator(nn.Module):
         return lin2
 
     def initHidden(self, num_samples, layer):
-        return torch.randn(layer, num_samples, self.hidden_size, device=self.device, requires_grad=False)
+        return torch.randn(
+            layer,
+            num_samples,
+            self.hidden_size,
+            device=self.device,
+            requires_grad=False,
+        )
 
 
 class MotionDiscriminatorForFID(MotionDiscriminator):
     def forward(self, motion_sequence, lengths=None, hidden_unit=None):
         # dim (motion_length, num_samples, hidden_size)
         bs, njoints, nfeats, num_frames = motion_sequence.shape
-        motion_sequence = motion_sequence.reshape(bs, njoints*nfeats, num_frames)
+        motion_sequence = motion_sequence.reshape(bs, njoints * nfeats, num_frames)
         motion_sequence = motion_sequence.permute(2, 0, 1)
         if hidden_unit is None:
             # motion_sequence = motion_sequence.permute(1, 0, 2)
@@ -62,18 +80,23 @@ class MotionDiscriminatorForFID(MotionDiscriminator):
         gru_o, _ = self.recurrent(motion_sequence.float(), hidden_unit)
 
         # select the last valid, instead of: gru_o[-1, :, :]
-        out = gru_o[tuple(torch.stack((lengths-1, torch.arange(bs, device=self.device))))]
+        out = gru_o[
+            tuple(torch.stack((lengths - 1, torch.arange(bs, device=self.device))))
+        ]
 
         # dim (num_samples, 30)
         lin1 = self.linear1(out)
         lin1 = torch.tanh(lin1)
         return lin1
-    
+
 
 def get_model_and_dataloader(args):
     # TODO creat train and test split
     dataset = FallingDataset1Phase(
-    args["data_config"]["data_path"], data_aug=True, max_frame_dict=args["constant"]["max_frame_dict"], split="train"
+        args["data_config"]["data_path"],
+        data_aug=True,
+        max_frame_dict=args["constant"]["max_frame_dict"],
+        split="train",
     )
     data_configs = {"combined": dataset[0]["combined_label"].size(0)}
     num_frames, num_joints, feat_dim = dataset[0]["combined_combined_poses"].size()
@@ -81,30 +104,42 @@ def get_model_and_dataloader(args):
         {"num_frames": num_frames, "num_joints": num_joints, "feat_dim": feat_dim}
     )
     print(f'Output size: {data_configs["combined"]}')
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=args["recognition_config"]["batch_size"], shuffle=True, num_workers=4)
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=args["recognition_config"]["batch_size"],
+        shuffle=True,
+        num_workers=4,
+    )
     attr_size = dataset.get_attr_size()
     num_class = data_configs["combined"]
     # load STGCN model
-    model = STGCN(in_channels=feat_dim, 
-                  num_class=num_class,
-                  graph_args={"layout": "smpl", "strategy": "spatial"},
-                  edge_importance_weighting=True, 
-                  device=DEVICE).to(DEVICE)
+    model = STGCN(
+        in_channels=feat_dim,
+        num_class=num_class,
+        graph_args={"layout": "smpl", "strategy": "spatial"},
+        edge_importance_weighting=True,
+        device=DEVICE,
+    ).to(DEVICE)
     # model = MotionDiscriminator(data_configs["feat_dim"], hidden_size=256, hidden_layer=2, device=DEVICE, output_size=data_configs["combined"]).to(DEVICE)
     return model, dataloader, attr_size, num_class
 
-def train_evaluation_model(args, ):
+
+def train_evaluation_model(
+    args,
+):
     """
     train a simple GRU model to evaluate the performance of the model
     """
     output_dir = Path(args["recognition_config"]["output_path"])
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     recognition_config = args["recognition_config"]
     model, dataloader, attr_size, num_class = get_model_and_dataloader(args)
 
     # load pretrain weights
-    state_dict = torch.load(recognition_config["pretrained_weights"], map_location=DEVICE)
+    state_dict = torch.load(
+        recognition_config["pretrained_weights"], map_location=DEVICE
+    )
     # remove unwanted keys
     kets_to_remove = ["fcn.weight", "fcn.bias"]
     for key in kets_to_remove:
@@ -120,9 +155,11 @@ def train_evaluation_model(args, ):
             optimizer.zero_grad()
             # input_shape:  Batch, Num Joints, Angle Rep (6), Time
             x = data_dict["combined_combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :]
-            input_dict = {"x": x.to(DEVICE),
-                          "y": data_dict["combined_label"].to(DEVICE),
-                          "attribute_size": attr_size}
+            input_dict = {
+                "x": x.to(DEVICE),
+                "y": data_dict["combined_label"].to(DEVICE),
+                "attribute_size": attr_size,
+            }
             batch_output = model(input_dict)
             loss, loss_dict = model.compute_loss(batch_output)
             loss.backward()
@@ -137,13 +174,16 @@ def train_evaluation_model(args, ):
         wandb.log({"epoch_loss": epoch_loss})
         for key in loss_dict.keys():
             wandb.log({f"epoch_{key}": loss_dict[key]})
-        
-        if (epoch+1) % recognition_config["model_save_freq"] == 0:
-            torch.save(model.state_dict(), output_dir/f"recognition_model_{epoch}.pt")
+
+        if (epoch + 1) % recognition_config["model_save_freq"] == 0:
+            torch.save(model.state_dict(), output_dir / f"recognition_model_{epoch}.pt")
 
     # evaluate the model
     evaluate_dataset = FallingDataset1Phase(
-        args["data_config"]["data_path"], data_aug=True, max_frame_dict=args["constant"]["max_frame_dict"], split="eval"
+        args["data_config"]["data_path"],
+        data_aug=True,
+        max_frame_dict=args["constant"]["max_frame_dict"],
+        split="eval",
     )
     humming_score_list = []
     total_label_item = 0
@@ -151,22 +191,17 @@ def train_evaluation_model(args, ):
         for batch in evaluate_dataset:
             x = batch["combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :].to(DEVICE)
             label = batch["label"].to(DEVICE)
-            input_dict = {
-                "x": x,
-                "y": label,
-                "attribute_size": num_class
-            }
+            input_dict = {"x": x, "y": label, "attribute_size": num_class}
             output = model(input_dict)
             pred = output["yhat"]
             binarized_pred = torch.sigmoid(pred).round()
             humming_score = torch.sum(binarized_pred == label).item()
-            total_label_item += label.size(0)*label.size(1)
+            total_label_item += label.size(0) * label.size(1)
             humming_score_list.append(humming_score)
 
-    humming_score = sum(humming_score_list)/total_label_item
-    print(f'Humming score: {humming_score}')
+    humming_score = sum(humming_score_list) / total_label_item
+    print(f"Humming score: {humming_score}")
     wandb.log({"humming_score": humming_score})
-        
 
 
 def parse_args():
@@ -183,6 +218,7 @@ def parse_args():
     with open(cmd_args.config_path, "r") as f:
         args = yaml.load(f, Loader=yaml.FullLoader)
     return args
+
 
 if __name__ == "__main__":
     args = parse_args()

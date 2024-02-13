@@ -2,6 +2,7 @@ import numpy as np
 from scipy import linalg
 import torch
 
+
 def calculate_activation_statistics(activations):
     """Calculation of the statistics used by the FID.
     Params:
@@ -42,18 +43,22 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     sigma1 = np.atleast_2d(sigma1)
     sigma2 = np.atleast_2d(sigma2)
 
-    assert mu1.shape == mu2.shape, \
-        'Training and test mean vectors have different lengths'
-    assert sigma1.shape == sigma2.shape, \
-        'Training and test covariances have different dimensions'
+    assert (
+        mu1.shape == mu2.shape
+    ), "Training and test mean vectors have different lengths"
+    assert (
+        sigma1.shape == sigma2.shape
+    ), "Training and test covariances have different dimensions"
 
     diff = mu1 - mu2
 
     # Product might be almost singular
     covmean, _ = linalg.sqrtm(sigma1.dot(sigma2), disp=False)
     if not np.isfinite(covmean).all():
-        msg = ('fid calculation produces singular product; '
-               'adding %s to diagonal of cov estimates') % eps
+        msg = (
+            "fid calculation produces singular product; "
+            "adding %s to diagonal of cov estimates"
+        ) % eps
         print(msg)
         offset = np.eye(sigma1.shape[0]) * eps
         covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
@@ -62,33 +67,39 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     if np.iscomplexobj(covmean):
         if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
             m = np.max(np.abs(covmean.imag))
-            raise ValueError('Imaginary component {}'.format(m))
+            raise ValueError("Imaginary component {}".format(m))
         covmean = covmean.real
 
     tr_covmean = np.trace(covmean)
 
-    return (diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * tr_covmean)
+    return diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * tr_covmean
+
 
 def calculate_fid(statistics_1, statistics_2):
-    return calculate_frechet_distance(statistics_1[0], statistics_1[1],
-                                      statistics_2[0], statistics_2[1])
+    return calculate_frechet_distance(
+        statistics_1[0], statistics_1[1], statistics_2[0], statistics_2[1]
+    )
 
 
-def calculate_accuracy(model, motion_loader, num_labels, classifier, device):
-    confusion = torch.zeros(num_labels, num_labels, dtype=torch.long)
-    with torch.no_grad():
-        for batch in motion_loader:
-            batch_prob = classifier(batch)["yhat"]
-            batch_pred = batch_prob.max(dim=1).indices
-            for label, pred in zip(batch["y"], batch_pred):
-                confusion[label][pred] += 1
+def calculate_per_att_correctness(pred, label, seg_list):
+    total_correct = 0
+    for idx, seg in enumerate(seg_list):
+        start_idx = sum(seg_list[:idx])
+        end_idx = start_idx + seg
 
-    accuracy = torch.trace(confusion)/torch.sum(confusion)
-    return accuracy.item(), confusion
+        pred_seg = pred[:, start_idx:end_idx]
+        label_seg = label[:, start_idx:end_idx]
+
+        pred_seg = torch.argmax(pred_seg, dim=1)
+        label_seg = torch.argmax(label_seg, dim=1)
+        total_correct += torch.sum(pred_seg == label_seg).item()
+
+    return total_correct
 
 
 import torch
 import numpy as np
+
 
 def compute_hamming_score(self, batch):
     # apply sigmoid to yhat
@@ -96,7 +107,8 @@ def compute_hamming_score(self, batch):
     ygt = batch["y"]
     # calculate how many elements are equal
     hamming = torch.sum(yhat == ygt).item()
-    return hamming/len(ygt)
+    return hamming / len(ygt)
+
 
 def compute_exact_match(self, batch):
     attr_size = batch["attribute_size"]
@@ -116,12 +128,11 @@ def calculate_diversity(activations, labels, num_labels, seed=None):
 
     if seed is not None:
         np.random.seed(seed)
-        
+
     first_indices = np.random.randint(0, num_motions, diversity_times)
     second_indices = np.random.randint(0, num_motions, diversity_times)
     for first_idx, second_idx in zip(first_indices, second_indices):
-        diversity += torch.dist(activations[first_idx, :],
-                                activations[second_idx, :])
+        diversity += torch.dist(activations[first_idx, :], activations[second_idx, :])
     diversity /= diversity_times
 
     # multimodality = 0
@@ -149,4 +160,4 @@ def calculate_diversity(activations, labels, num_labels, seed=None):
 
     # multimodality /= (multimodality_times * num_labels)
 
-    return diversity.item()#, multimodality.item()
+    return diversity.item()  # , multimodality.item()

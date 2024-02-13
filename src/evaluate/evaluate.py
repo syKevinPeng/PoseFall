@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 
 from src.evaluate import recognition_models
-from .metric import calculate_accuracy, calculate_diversity, calculate_fid
+from .metric import calculate_per_att_correctness, calculate_diversity, calculate_fid
 from .stgcn import STGCN
 from .evaluate_dataloader import EvaluateDataset
 from ..dataloader import FallingDataset1Phase
@@ -65,7 +65,9 @@ class Evaluation:
 
         metrics = {}
         humming_score_list = []
-        total_label_item = 0
+        per_attri_acc_list = []
+        total_label_item = 0  # for calculating humming score
+        total_attri_label_item = 0  # for calculating per-attribute accuracy
 
         eval_activations = []
         gt_activations = []
@@ -84,7 +86,6 @@ class Evaluation:
                     "y": eval_label,
                     "attribute_size": self.num_classes,
                 }
-                print(f'attribute size: {eval_input_dict["attribute_size"]}')
                 gt_x = (
                     gt_batch["combined_combined_poses"]
                     .permute(0, 2, 3, 1)[:, :24, :, :]
@@ -101,7 +102,7 @@ class Evaluation:
                     print(f"Eval label: {eval_label}")
                     print(f"GT label: {gt_label}")
                     raise ValueError(
-                        f"Labels for eval batch and GT batch are not equal." # they have to be equal for calculating the FID score
+                        f"Labels for eval batch and GT batch are not equal."  # they have to be equal for calculating the FID score
                     )
 
                 eval_output = self.model(eval_input_dict)
@@ -110,6 +111,12 @@ class Evaluation:
                 # calculate humming score
                 humming_score = torch.sum(eval_binarized_pred == eval_label).item()
                 # calculate per-attribute accuracy
+                num_correct_pred = calculate_per_att_correctness(
+                    eval_pred, eval_label, label_seg
+                )
+                per_attri_acc_list.append(num_correct_pred)
+                total_attri_label = len(eval_label) * len(eval_label[0])
+                total_attri_label_item += total_attri_label
                 # save features for calculating fid
                 eval_features = eval_output["features"]
                 eval_activations.append(eval_features)
@@ -124,6 +131,8 @@ class Evaluation:
 
         metrics["humming_score"] = sum(humming_score_list) / total_label_item
         print(f'Humming score: {metrics["humming_score"]}')
+        metrics["per_attri_acc"] = sum(per_attri_acc_list) / total_attri_label_item
+        print(f'Per attribute accuracy: {metrics["per_attri_acc"]}')
         eval_activations = torch.cat(eval_activations, dim=0)
         eval_labels_list = torch.cat(eval_labels_list, dim=0)
 
