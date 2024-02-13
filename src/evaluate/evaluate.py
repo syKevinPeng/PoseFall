@@ -112,32 +112,6 @@ class Evaluation:
         print(f'Diversity: {diversity}')
         metrics["diversity"] = diversity
 
-        # #######
-
-        # if len(eval_dataloader) != len(GT_dataloader):
-        #     raise ValueError(f'Length of eval dataloader {len(eval_dataloader)} and GT dataloader {len(GT_dataloader)} are not equal.')
-        # for i, (eval_batch, GT_batch) in enumerate(zip(eval_dataloader, GT_dataloader)):
-        #     eval_label = eval_batch["label"].cpu().numpy()
-        #     GT_label = GT_batch["combined_label"].cpu().numpy().astype(int)
-        #     if not np.array_equal(eval_label, GT_label):
-        #         print(f'Eval label: {eval_label}')
-        #         print(f'GT label: {GT_label}')
-        #         raise ValueError(f'Labels for eval batch {i} and GT batch {i} are not equal.')
-        # gt_activations = []
-        # #run stats on GT data
-        # with torch.no_grad():
-        #     for eval_batch in GT_dataloader:
-        #         eval_x = eval_batch["combined_combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :].to(DEVICE)
-        #         eval_label = eval_batch["combined_label"].to(DEVICE)
-        #         eval_input_dict = {
-        #             "x": eval_x,
-        #             "y": eval_label,
-        #             "attribute_size": self.num_classes
-        #         }
-        #         eval_output = self.model(eval_input_dict)
-        #         eval_features = eval_output["features"]
-        #         gt_activations.append(eval_features)
-
         gt_activations = torch.cat(gt_activations, dim=0)
         gtstats = self.calculate_activation_statistics(gt_activations)
         fid = calculate_fid(gtstats, eval_stats)
