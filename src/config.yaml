@@ -34,6 +34,15 @@ constant:
     - 'impa'
     - 'glit'
     - 'fall'
+  attributes:
+    impact_phase_att: # full list: ["Impact Location", "Impact Attribute", "Impact Force"]
+      - "Impact Location"
+      - "Impact Attribute"
+    glitch_phase_att: # full list: ["Glitch Speed", "Glitch Attribute"]
+      - "Glitch Attribute"
+    fall_phase_att:  # full list ["Fall Attribute","End Postion"]
+      - "Fall Attribute"
+
   max_frame_dict:
     impa: 100
     glit: 200

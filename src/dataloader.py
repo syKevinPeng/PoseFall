@@ -7,14 +7,14 @@ from .data_processing.utils import euler_angles_to_matrix, matrix_to_rotation_6d
 import numpy as np
 from icecream import ic
 
-impact_phase_att = [
-    "Impact Location",
-    "Impact Attribute",
-]  # full list: ["Impact Location", "Impact Attribute", "Impact Force"]
-glitch_phase_att = [
-    "Glitch Attribute"
-]  # full list: ["Glitch Speed", "Glitch Attribute"]
-fall_phase_att = ["Fall Attribute"]  # full list ["Fall Attribute","End Postion"]
+# impact_phase_att = [
+#     "Impact Location",
+#     "Impact Attribute",
+# ]  # full list: ["Impact Location", "Impact Attribute", "Impact Force"]
+# glitch_phase_att = [
+#     "Glitch Attribute"
+# ]  # full list: ["Glitch Speed", "Glitch Attribute"]
+# fall_phase_att = ["Fall Attribute"]  # full list ["Fall Attribute","End Postion"]
 
 
 class FallingDataset3Phase(Dataset):
@@ -24,6 +24,7 @@ class FallingDataset3Phase(Dataset):
 
     def __init__(
         self,
+        args, # config file
         data_path,
         max_frame_dict,
         data_aug=True,
@@ -48,22 +49,29 @@ class FallingDataset3Phase(Dataset):
         if not self.label_path.exists():
             raise FileNotFoundError(f"{self.label_path} does not exist")
         # processing the label and only select needed col/attributes
+        self.args = args
         self.label = pd.read_csv(self.label_path)
         label_col = self.label.columns.to_list()
+        label_att = self.args["constant"]["attributes"]
+
+        self.impact_phase_att = label_att["impact_phase_att"]
+        self.glitch_phase_att = label_att["glitch_phase_att"]
+        self.fall_phase_att = label_att["fall_phase_att"]
+
         impact_label = ["Trial Number"] + [
             col
             for col in label_col
-            if any(col.startswith(att) for att in impact_phase_att)
+            if any(col.startswith(att) for att in self.impact_phase_att)
         ]
         glitch_label = ["Trial Number"] + [
             col
             for col in label_col
-            if any(col.startswith(att) for att in glitch_phase_att)
+            if any(col.startswith(att) for att in self.glitch_phase_att)
         ]
         fall_label = ["Trial Number"] + [
             col
             for col in label_col
-            if any(col.startswith(att) for att in fall_phase_att)
+            if any(col.startswith(att) for att in self.fall_phase_att)
         ]
         self.impact_label = self.label[impact_label]
         self.glitch_label = self.label[glitch_label]
@@ -204,6 +212,7 @@ class FallingDataset1Phase(FallingDataset3Phase):
 
     def __init__(
         self,
+        args, # config file
         data_path,
         max_frame_dict,
         data_aug=True,
@@ -211,7 +220,7 @@ class FallingDataset1Phase(FallingDataset3Phase):
         padding=True,
         split="all",
     ):
-        super().__init__(data_path, data_aug, sampling_every_n_frames, split=split)
+        super().__init__(args, data_path, data_aug, sampling_every_n_frames, split=split)
         self.phase = "combined"
         self.data_aug = data_aug
         self.sampling_every_n_frames = sampling_every_n_frames
@@ -220,7 +229,7 @@ class FallingDataset1Phase(FallingDataset3Phase):
         # self.onehot_label = onehot_label
 
         self.label_col = np.concatenate(
-            [impact_phase_att, glitch_phase_att, fall_phase_att]
+            [self.impact_phase_att, self.glitch_phase_att, self.fall_phase_att]
         )
         # print(f'label_col: {label_col}')
 

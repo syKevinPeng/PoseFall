@@ -1,12 +1,17 @@
+from requests import head
 import torch
 from torch.utils.data import Dataset
 from pathlib import Path
 from .stgcn import STGCN
 import argparse, yaml
 from tqdm import tqdm
-DEVICE  = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 import pandas as pd
 from ..data_processing.utils import euler_angles_to_matrix, matrix_to_rotation_6d
+import numpy as np
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 class EvaluateDataset(Dataset):
     def __init__(self, config, data_path, max_frame_dict, padding=True):
         self.config = config
@@ -16,19 +21,39 @@ class EvaluateDataset(Dataset):
 
         if not self.data_path.is_dir():
             raise ValueError(f"{self.data_path} is not a directory.")
-        
+
         self.data_list = sorted(list(self.data_path.glob("*.csv")))
-        # print(f'self.data_list: {self.data_list}')
-        # exit()
         num_class = len(self.data_list[0].stem.split("_")[1])
         print(f"Number of classes: {num_class}")
-        self.recognition_model =  STGCN(in_channels=6, 
-                  num_class=num_class, 
-                  graph_args={"layout": "smpl", "strategy": "spatial"},
-                  edge_importance_weighting=True, 
-                  device=DEVICE).to(DEVICE)
+        self.recognition_model = STGCN(
+            in_channels=6,
+            num_class=num_class,
+            graph_args={"layout": "smpl", "strategy": "spatial"},
+            edge_importance_weighting=True,
+            device=DEVICE,
+        ).to(DEVICE)
+        self.label_seg = self.get_label_segments()
 
-    
+    def get_label_segments(self):
+        label_seg = []
+        # get all label names
+        data_path = Path(self.config["data_config"]["data_path"])
+        label_path = data_path / "label.csv"
+        label_df = pd.read_csv(label_path, header=0)
+        all_labels = label_df.columns[1:]
+        # load selected attributes
+        impact_att = self.config["constant"]["attributes"]["impact_phase_att"]
+        glitch_att = self.config["constant"]["attributes"]["glitch_phase_att"]
+        fall_att = self.config["constant"]["attributes"]["fall_phase_att"]
+        for attri in np.concatenate([impact_att, glitch_att, fall_att]):
+            # count how many label in all_labels contains the string in attri
+            count = 0
+            for label in all_labels:
+                if attri in label:
+                    count += 1
+            label_seg.append([attri, count])
+        return label_seg
+
     def __len__(self):
         return len(self.data_list)
 
@@ -92,6 +117,7 @@ class EvaluateDataset(Dataset):
         data_dict[f"src_key_padding_mask"] = src_key_padding_mask
         return data_dict
 
+
 def parse_args():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Training script")
@@ -107,7 +133,8 @@ def parse_args():
         args = yaml.load(f, Loader=yaml.FullLoader)
     return args
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     args = parse_args()
     # prepare wandb
     # wandb.init(
@@ -119,5 +146,9 @@ if __name__=="__main__":
     #     notes="training recognition model with GT data",
     # )
     max_frame_dict = args["constant"]["max_frame_dict"]
-    dataset = EvaluateDataset(args, args["evaluate_config"]["evaluate_dataset_path"], max_frame_dict=max_frame_dict)
+    dataset = EvaluateDataset(
+        args,
+        args["evaluate_config"]["evaluate_dataset_path"],
+        max_frame_dict=max_frame_dict,
+    )
     print(dataset[0])

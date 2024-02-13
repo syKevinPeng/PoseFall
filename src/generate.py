@@ -22,6 +22,7 @@ import yaml, wandb
 # Set device
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 def load_ckpts(ckpt_path):
     """
     Load the checkpoint from the path
@@ -33,6 +34,7 @@ def load_ckpts(ckpt_path):
     # load checkpoint
     state_dict = torch.load(ckpt_path, map_location=DEVICE)
     return state_dict
+
 
 def get_model(model_type, num_class):
     """
@@ -48,11 +50,14 @@ def get_model(model_type, num_class):
         raise ValueError(f"Model type {model_type} not supported")
     return model
 
+
 def prepare_input_instance(data_instance):
     if "combined_label" in data_instance.keys():
         num_class = {"combined": data_instance["combined_label"].size(0)}
         print(f"Number of classes: {num_class}")
-        num_frames, num_joints, feat_dim = data_instance["combined_combined_poses"].size()
+        num_frames, num_joints, feat_dim = data_instance[
+            "combined_combined_poses"
+        ].size()
         num_class.update(
             {"num_frames": num_frames, "num_joints": num_joints, "feat_dim": feat_dim}
         )
@@ -67,49 +72,80 @@ def prepare_input_instance(data_instance):
             "glit": glit_label.size(0),
             "fall": fall_label.size(0),
         }
-        input_type  = "seperated"
+        input_type = "seperated"
 
     return num_class, input_type
+
 
 def get_model_and_dataset(args):
     model_name = args["generate_config"]["model_type"]
     train_config = args["generate_config"]
     # ======================== actual training pipeline ========================
     # Initialize model and optimizer
-    if model_name== "CVAE3E3D":
+    if model_name == "CVAE3E3D":
         dataset = FallingDataset3Phase(
-        args["data_config"]["data_path"], data_aug=False, max_frame_dict=args["constant"]["max_frame_dict"], phase=PHASES
+            args,
+            args["data_config"]["data_path"],
+            data_aug=False,
+            max_frame_dict=args["constant"]["max_frame_dict"],
+            phase=PHASES,
         )
         data_configs = {}
         for phase in PHASES:
-            num_frames, num_joints, feat_dim = dataset[0][f"{phase}_combined_poses"].size()
-            data_configs.update({
-                phase:{"num_frames": num_frames, "label_size":dataset[0][f"{phase}_label"].size(0)}
-            })
-        data_configs.update({
-            "num_joints": num_joints, "feat_dim": feat_dim, 
-        })
+            num_frames, num_joints, feat_dim = dataset[0][
+                f"{phase}_combined_poses"
+            ].size()
+            data_configs.update(
+                {
+                    phase: {
+                        "num_frames": num_frames,
+                        "label_size": dataset[0][f"{phase}_label"].size(0),
+                    }
+                }
+            )
+        data_configs.update(
+            {
+                "num_joints": num_joints,
+                "feat_dim": feat_dim,
+            }
+        )
         model = CVAE3E3D(data_config_dict=data_configs, config=args).to(DEVICE)
         input_type = "seperated"
-    elif model_name== "CVAE3E1D":
+    elif model_name == "CVAE3E1D":
         dataset = FallingDataset3Phase(
-        args["data_config"]["data_path"], data_aug=False, max_frame_dict=args["constant"]["max_frame_dict"]
+            args,
+            args["data_config"]["data_path"],
+            data_aug=False,
+            max_frame_dict=args["constant"]["max_frame_dict"],
         )
         data_configs = {}
         for phase in PHASES:
-            num_frames, num_joints, feat_dim = dataset[0][f"{phase}_combined_poses"].size()
-            data_configs.update({
-                phase:{"num_frames": num_frames, "label_size":dataset[0][f"{phase}_label"].size(0)}
-            })
-        data_configs.update({
-            "num_joints": num_joints, "feat_dim": feat_dim, 
-        })
-        print(f'Data Configs: \n {data_configs}')
+            num_frames, num_joints, feat_dim = dataset[0][
+                f"{phase}_combined_poses"
+            ].size()
+            data_configs.update(
+                {
+                    phase: {
+                        "num_frames": num_frames,
+                        "label_size": dataset[0][f"{phase}_label"].size(0),
+                    }
+                }
+            )
+        data_configs.update(
+            {
+                "num_joints": num_joints,
+                "feat_dim": feat_dim,
+            }
+        )
+        print(f"Data Configs: \n {data_configs}")
         model = CVAE3E1D(data_config_dict=data_configs, config=args).to(DEVICE)
         input_type = "seperated"
-    elif model_name== "CVAE1E1D":
+    elif model_name == "CVAE1E1D":
         dataset = FallingDataset1Phase(
-        args["data_config"]["data_path"], data_aug=False, max_frame_dict=args["constant"]["max_frame_dict"]
+            args=args,
+            data_path=args["data_config"]["data_path"],
+            data_aug=False,
+            max_frame_dict=args["constant"]["max_frame_dict"],
         )
         data_configs = {"combined": dataset[0]["combined_label"].size(0)}
         print(f"Number of classes: {data_configs}")
@@ -124,7 +160,6 @@ def get_model_and_dataset(args):
     else:
         raise ValueError(f"Model type {train_config['model_type']} not supported")
     return model, dataset, input_type
-
 
 
 if __name__ == "__main__":
@@ -158,7 +193,9 @@ if __name__ == "__main__":
 
     # dataset = FallingDataset1Phase(data_path, max_frame_dict=args["constant"]["max_frame_dict"])
     if not Path(generate_config["output_path"]).exists():
-        print(f"Output path {generate_config['output_path']} does not exist... Creating it")
+        print(
+            f"Output path {generate_config['output_path']} does not exist... Creating it"
+        )
         Path(generate_config["output_path"]).mkdir(parents=True, exist_ok=True)
     # ======================== prepare model ========================
     # num_class, input_type=prepare_input_instance(dataset[0])
@@ -187,7 +224,14 @@ if __name__ == "__main__":
             # print(f"impa_label: {input_batch['impa_label'].size()}")
             # print(f"glit_label: {input_batch['glit_label'].size()}")
             # print(f"fall_label: {input_batch['fall_label'].size()}")
-            label = torch.concatenate([data_dict["impa_label"], data_dict["glit_label"], data_dict["fall_label"]], axis=1)
+            label = torch.concatenate(
+                [
+                    data_dict["impa_label"],
+                    data_dict["glit_label"],
+                    data_dict["fall_label"],
+                ],
+                axis=1,
+            )
         elif input_type == "combined":
             input_batch = {
                 "combined_label": data_dict["combined_label"].to(DEVICE),
@@ -208,17 +252,29 @@ if __name__ == "__main__":
                     # remove padding
                     model_output = model_output[~(input_batch[f"{phase}_mask"].bool())]
                     num_fram, num_joints, feat_dim = model_output.size()
-                    phase_output = model_output.reshape(batch_size, -1, num_joints, feat_dim).cpu().detach()
+                    phase_output = (
+                        model_output.reshape(batch_size, -1, num_joints, feat_dim)
+                        .cpu()
+                        .detach()
+                    )
                     whole_sequences.append(phase_output)
                 whole_sequences = torch.concat(whole_sequences, axis=1)
-            elif generate_config["model_type"] == "CVAE3E1D" or generate_config["model_type"] == "CVAE1E1D":
+            elif (
+                generate_config["model_type"] == "CVAE3E1D"
+                or generate_config["model_type"] == "CVAE1E1D"
+            ):
                 whole_sequences = genreated_batch["combined_output"]
                 whole_sequences = whole_sequences
                 # remove padding
                 batch_size, num_fram, num_joints, feat_dim = whole_sequences.size()
-                whole_sequences = whole_sequences[~(input_batch["combined_mask"].bool())]
-                whole_sequences = whole_sequences.reshape(batch_size, -1, num_joints, feat_dim).cpu().detach()
-
+                whole_sequences = whole_sequences[
+                    ~(input_batch["combined_mask"].bool())
+                ]
+                whole_sequences = (
+                    whole_sequences.reshape(batch_size, -1, num_joints, feat_dim)
+                    .cpu()
+                    .detach()
+                )
 
             # parse the output
             parsed_seequnces = parse_output(whole_sequences)
@@ -238,17 +294,26 @@ if __name__ == "__main__":
             ).flatten()
             # get the first item in the batch
             data = torch.concatenate([arm_rot, arm_loc, bone_rot], axis=2)[0]
-            col_names = ["arm_rot_x", "arm_rot_y", "arm_rot_z"] + ["arm_loc_x", "arm_loc_y", "arm_loc_z"]+ list(joint_name)
+            col_names = (
+                ["arm_rot_x", "arm_rot_y", "arm_rot_z"]
+                + ["arm_loc_x", "arm_loc_y", "arm_loc_z"]
+                + list(joint_name)
+            )
             df = pd.DataFrame(
                 data=data,
-                columns= col_names,
+                columns=col_names,
             )
 
             # save the dataframe
-            df.to_csv(Path(generate_config['output_path']) / f"{str(idx).zfill(4)}_{label_str}_sequences_{i}.csv")
+            df.to_csv(
+                Path(generate_config["output_path"])
+                / f"{str(idx).zfill(4)}_{label_str}_sequences_{i}.csv"
+            )
             # visulization
             # frames = visulize_poses(df)
             # save frames
             # imageio.mimsave(Path(generate_config['output_path']) / f"{i}_sequences.gif", frames, fps=30)
 
-    print(f"Generated {generate_config['num_to_gen']} sequences for all the dataset and saved them to {generate_config['output_path']}")
+    print(
+        f"Generated {generate_config['num_to_gen']} sequences for all the dataset and saved them to {generate_config['output_path']}"
+    )
