@@ -54,72 +54,93 @@ class Evaluation:
 
     def evaluate(self, eval_dataloader, GT_dataloader):
 
-        computedfeats = {}
         metrics = {}
         humming_score_list= []
         total_label_item = 0
 
-        activations = []
-        labels = []
+        eval_activations = []
+        gt_activations = []
+        eval_labels_list = []
         with torch.no_grad():
-            for batch in eval_dataloader:
-                x = batch["combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :].to(DEVICE)
-                label = batch["label"].to(DEVICE)
-                input_dict = {
-                    "x": x,
-                    "y": label,
+            for eval_batch, gt_batch in zip(eval_dataloader, GT_dataloader):
+                eval_x = eval_batch["combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :].to(DEVICE)
+                eval_label = eval_batch["label"].to(DEVICE)
+                eval_input_dict = {
+                    "x": eval_x,
+                    "y": eval_label,
                     "attribute_size": self.num_classes
                 }
-                output = self.model(input_dict)
-                pred = output["yhat"]
-                binarized_pred = torch.sigmoid(pred).round()
-                humming_score = torch.sum(binarized_pred == label).item()
-                features = output["features"]
-                activations.append(features)
-                labels.append(label)
+                gt_x = gt_batch["combined_combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :].to(DEVICE)
+                gt_label = gt_batch["combined_label"].numpy().astype(int)
+                gt_input_dict = {
+                    "x": gt_x,
+                    "y": gt_label,
+                    "attribute_size": self.num_classes
+                }
+                # sanity check
+                if not np.array_equal(eval_label.cpu().numpy(), gt_label):
+                    print(f'Eval label: {eval_label}')
+                    print(f'GT label: {gt_label}')
+                    raise ValueError(f'Labels for eval batch and GT batch are not equal.')
+
+                eval_output = self.model(eval_input_dict)
+                eval_pred = eval_output["yhat"]
+                eval_binarized_pred = torch.sigmoid(eval_pred).round()
+                humming_score = torch.sum(eval_binarized_pred == eval_label).item()
+                eval_features = eval_output["features"]
+                eval_activations.append(eval_features)
+                eval_labels_list.append(eval_label)
                 humming_score_list.append(humming_score)
-                total_label_item += label.size(0)*label.size(1)
+                total_label_item += eval_label.size(0)*eval_label.size(1)
+
+                # gt
+                gt_output = self.model(gt_input_dict)
+                gt_features = gt_output["features"]
+                gt_activations.append(gt_features)
+                
         
         metrics["humming_score"] = sum(humming_score_list)/total_label_item
         print(f'Humming score: {metrics["humming_score"]}')
-        activations = torch.cat(activations, dim=0)
-        labels = torch.cat(labels, dim=0)
+        eval_activations = torch.cat(eval_activations, dim=0)
+        eval_labels_list = torch.cat(eval_labels_list, dim=0)
 
         # features for diversity
-        stats = self.calculate_activation_statistics(activations)
-        labels = labels.cpu().numpy()
-        diversity = calculate_diversity(activations, labels, self.num_classes,
+        eval_stats = self.calculate_activation_statistics(eval_activations)
+        eval_labels_list = eval_labels_list.cpu().numpy()
+        diversity = calculate_diversity(eval_activations, eval_labels_list, self.num_classes,
                                                  seed=self.seed)
         print(f'Diversity: {diversity}')
         metrics["diversity"] = diversity
 
-        if len(eval_dataloader) != len(GT_dataloader):
-            raise ValueError(f'Length of eval dataloader {len(eval_dataloader)} and GT dataloader {len(GT_dataloader)} are not equal.')
-        for i, (eval_batch, GT_batch) in enumerate(zip(eval_dataloader, GT_dataloader)):
-            eval_label = eval_batch["label"].cpu().numpy()
-            GT_label = GT_batch["combined_label"].cpu().numpy().astype(int)
-            if not np.array_equal(eval_label, GT_label):
-                print(f'Eval label: {eval_label}')
-                print(f'GT label: {GT_label}')
-                raise ValueError(f'Labels for eval batch {i} and GT batch {i} are not equal.')
-        gt_activations = []
-        #run stats on GT data
-        with torch.no_grad():
-            for batch in GT_dataloader:
-                x = batch["combined_combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :].to(DEVICE)
-                label = batch["combined_label"].to(DEVICE)
-                input_dict = {
-                    "x": x,
-                    "y": label,
-                    "attribute_size": self.num_classes
-                }
-                output = self.model(input_dict)
-                features = output["features"]
-                gt_activations.append(features)
+        # #######
+
+        # if len(eval_dataloader) != len(GT_dataloader):
+        #     raise ValueError(f'Length of eval dataloader {len(eval_dataloader)} and GT dataloader {len(GT_dataloader)} are not equal.')
+        # for i, (eval_batch, GT_batch) in enumerate(zip(eval_dataloader, GT_dataloader)):
+        #     eval_label = eval_batch["label"].cpu().numpy()
+        #     GT_label = GT_batch["combined_label"].cpu().numpy().astype(int)
+        #     if not np.array_equal(eval_label, GT_label):
+        #         print(f'Eval label: {eval_label}')
+        #         print(f'GT label: {GT_label}')
+        #         raise ValueError(f'Labels for eval batch {i} and GT batch {i} are not equal.')
+        # gt_activations = []
+        # #run stats on GT data
+        # with torch.no_grad():
+        #     for eval_batch in GT_dataloader:
+        #         eval_x = eval_batch["combined_combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :].to(DEVICE)
+        #         eval_label = eval_batch["combined_label"].to(DEVICE)
+        #         eval_input_dict = {
+        #             "x": eval_x,
+        #             "y": eval_label,
+        #             "attribute_size": self.num_classes
+        #         }
+        #         eval_output = self.model(eval_input_dict)
+        #         eval_features = eval_output["features"]
+        #         gt_activations.append(eval_features)
 
         gt_activations = torch.cat(gt_activations, dim=0)
         gtstats = self.calculate_activation_statistics(gt_activations)
-        fid = calculate_fid(gtstats, stats)
+        fid = calculate_fid(gtstats, eval_stats)
         print(f'FID: {fid}')
         metrics["fid"] = fid
 
