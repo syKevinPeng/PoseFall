@@ -147,7 +147,7 @@ class CVAE3E3D(nn.Module):
         interphase_loss, inter_loss_dict = compute_inter_phase_loss(self.phase_names, batch, loss_weights_dict=self.config['loss_config'])
         total_loss += interphase_loss
         all_loss_dict.update(inter_loss_dict)
-        all_loss_dict.update({"total_loss": total_loss.items()})
+        all_loss_dict.update({"total_loss": total_loss.item()})
         return total_loss, all_loss_dict
     
     def generate(self, input_batch):

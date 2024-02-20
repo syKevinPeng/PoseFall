@@ -1,4 +1,4 @@
-define: &exp_name "exp_3"
+define: &exp_name "exp_4"
 
 train_config:
   epochs: 3000
@@ -19,7 +19,7 @@ wandb_config:
 data_config:
   data_path: &data_path "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
   pretrained_weights: "/home/siyuan/research/PoseFall/src/model/pretrained_models/uestc/checkpoint_1000.pth.tar" 
-  ckpt_path: ""
+  ckpt_path: "/home/siyuan/research/PoseFall/train_exps"
 
 
 loss_config:
@@ -27,7 +27,7 @@ loss_config:
   vertex_loss_weight: 1
   kl_loss_weight: 0.00001
   loc_loss_weight: 1
-  var_loss_weight: 0.1
+  var_loss_weight: 0.5
 
 constant:
   PHASES:
@@ -52,7 +52,8 @@ generate_config:
   # 1E1D checkpoint
   # ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240109_012926-zjoxy2jq/files/2024-01-09_01-29-27_exp_0/epoch_1999.pth"
   # 3E3D checkpoint   
-  ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240109_192054-obzeak8j/files/2024-01-09_19-20-55_exp_3/epoch_2999.pth"
+  # ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240109_192054-obzeak8j/files/2024-01-09_19-20-55_exp_3/epoch_2999.pth"
+  ckpt_path: "/home/siyuan/research/PoseFall/train_exps/2024-02-20_01-48-06_exp_4/epoch_2999.pth"
   data_path: *data_path
   output_path: "./gen_results_3E3D_20"
   num_to_gen: 20
@@ -66,7 +67,7 @@ generate_config:
 
 recognition_config:
   pretrained_weights: "/home/siyuan/research/PoseFall/src/model/pretrained_models/recognition/uestc_rot6d_stgcn.tar"
-  output_path: "./src/evaluate/recognition_ckpts_post_4_GRU"
+  output_path: "./src/evaluate/recognition_ckpts_vanilla"
   batch_size: 16
   lr: 0.00005
   epochs: 2000
@@ -74,8 +75,8 @@ recognition_config:
   evaluation_freq: 200
   wandb_config:
     wandb_mode: 'online'
-    wandb_tags: ['recognition', 'train', "with RNN"]
-    wandb_description: "STGCN + RNN. Four layers of GRU unit in the for loop / ouput layer"
+    wandb_tags: ['recognition', 'train', ]
+    wandb_description: "STGCN only"
 
 evaluate_config:
   evaluate_dataset_path: "/home/siyuan/research/PoseFall/gen_results_3E3D_20"

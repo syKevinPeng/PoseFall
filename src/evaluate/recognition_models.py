@@ -130,7 +130,7 @@ def get_model_and_dataloader(args):
         data_path = args["data_config"]["data_path"],
         data_aug = True,
         max_frame_dict = args["constant"]["max_frame_dict"],
-        split="eval",
+        split="all",
     )
     eval_dataloader = torch.utils.data.DataLoader(
         eval_dataset,
@@ -170,7 +170,7 @@ def train_evaluation_model(
         epoch_loss = 0
         cum_loss_dict = {}
         for i_batch, data_dict in tqdm(enumerate(train_dataloader)):
-            optimizer.zero_grad()
+            optimizer.zero_grad()   
             # input_shape:  Batch, Num Joints, Angle Rep (6), Time
             x = data_dict[f"combined_combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :]
             input_dict = {

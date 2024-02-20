@@ -209,3 +209,13 @@ gen_results*
 src/model/pretrained_models/recognition/uestc_rot6d_stgcn.tar
 
 src/evaluate/recognition_ckpts/*
+src/evaluate/recognition_ckpts_old/recognition_model_499.pt
+src/evaluate/recognition_ckpts_old/recognition_model_999.pt
+src/evaluate/recognition_ckpts_old/recognition_model_1499.pt
+src/evaluate/recognition_ckpts_old/recognition_model_1999.pt
+src/evaluate/recognition_ckpts_old/recognition_model_2499.pt
+src/evaluate/recognition_ckpts_old/recognition_model_2999.pt
+
+src/tran_exps/*
+*pt
+*pth

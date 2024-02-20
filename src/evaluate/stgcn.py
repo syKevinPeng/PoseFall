@@ -1,3 +1,4 @@
+from cmath import phase
 import attr
 import torch
 import torch.nn as nn
@@ -11,9 +12,10 @@ __all__ = ["STGCN"]
 class SequentialModel(nn.Module):
     def __init__(self, input_size, hidden_size, phase_output_sizes, num_layers):
         super().__init__()
-        self.gru = nn.GRU(input_size, hidden_size, num_layers, batch_first=True)
+        self.gru_in_loop = nn.GRU(input_size, hidden_size, num_layers, batch_first=True)
+        self.gru_before_loop = nn.GRU(input_size, hidden_size, num_layers, batch_first=True)
         self.phase_fc_layers = nn.ModuleList([nn.Linear(hidden_size, size) for size in phase_output_sizes])
-
+        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x):
         phase_outputs = []
@@ -21,14 +23,34 @@ class SequentialModel(nn.Module):
         for fc in self.phase_fc_layers:
             # Pass x and the current hidden state to the GRU
             # GRU returns the output and the new hidden state
-            x, hidden = self.gru(x, hidden)  # Pass the same hidden state across iterations
+            x, hidden = self.gru_in_loop(x, hidden)  # Pass the same hidden state across iterations
             # Assuming x has shape (batch, seq_len, hidden_size), take the last sequence output for classification
             last_seq_output = x[:, -1, :]
             phase_output = fc(last_seq_output)
+            phase_output = self.softmax(phase_output)
             phase_outputs.append(phase_output)
             # Optionally, reshape phase_output to match the input dimensions for the next phase prediction
             # This might involve expanding dimensions or adding sequence length as 1 if needed
         return phase_outputs
+
+class BranchModel(nn.Module):
+    def __init__(self, input_size, hidden_size, phase_output_sizes, num_layers):
+        super().__init__()
+        self.gru = nn.GRU(input_size, hidden_size, num_layers, batch_first=True)
+        self.phase_fc_layers = nn.ModuleList([nn.Linear(hidden_size, size) for size in phase_output_sizes])
+        self.softmax = nn.Softmax(dim=1)
+    def forward(self, x):
+        phase_outputs = []
+        hidden = None
+        x, hidden = self.gru(x, hidden)
+        for fc in self.phase_fc_layers:
+            last_seq_output = x[:, -1, :]
+            phase_output = fc(last_seq_output)
+            phase_output = self.softmax(phase_output)
+            phase_outputs.append(phase_output)
+        return phase_outputs
+    
+        
 
 
 class STGCN(nn.Module):
@@ -96,7 +118,7 @@ class STGCN(nn.Module):
 
         # initialize RNN
         self.rnn = SequentialModel(input_size = 256, hidden_size = 256, phase_output_sizes=phase_output_size, num_layers=4)
-
+        self.branch = BranchModel(input_size = 256, hidden_size = 256, phase_output_sizes=phase_output_size, num_layers=4)
     def forward(self, batch):
         # TODO: use mask
         # Received batch["x"] as
@@ -131,13 +153,12 @@ class STGCN(nn.Module):
         batch["features"] = x.squeeze()
 
         # RNN
-        x = x.view(N, -1, 256)
-        x = self.rnn(x)
-
+        # x = x.view(N, -1, 256)
+        # x = self.branch(x)      
 
         # # prediction
-        # x = self.fcn(x)
-        # x = x.view(x.size(0), -1)
+        x = self.fcn(x)
+        x = x.view(x.size(0), -1)
         batch["yhat"] = x
         return batch
     

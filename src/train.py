@@ -8,10 +8,10 @@ torch.manual_seed(0)
 
 import torch.nn as nn
 import torch.nn.functional as F
-from dataloader import FallingDataset3Phase, FallingDataset1Phase
-from model.CVAE3E3D import CVAE3E3D
-from model.CVAE3E1D import CVAE3E1D
-from model.CVAE1E1D import CVAE1E1D
+from .dataloader import FallingDataset3Phase, FallingDataset1Phase
+from .model.CVAE3E3D import CVAE3E3D
+from .model.CVAE3E1D import CVAE3E1D
+from .model.CVAE1E1D import CVAE1E1D
 from icecream import ic
 import wandb, yaml
 from pathlib import Path
@@ -57,8 +57,8 @@ def get_model_and_dataset(args):
     # ======================== actual training pipeline ========================
     # Initialize model and optimizer
     if model_name== "CVAE3E3D":
-        dataset = FallingDataset3Phase(
-        args["data_config"]["data_path"], data_aug=train_config["data_aug"], max_frame_dict=args["constant"]["max_frame_dict"], phase=PHASES
+        dataset = FallingDataset3Phase( args=args, 
+        data_path=args["data_config"]["data_path"], data_aug=train_config["data_aug"], max_frame_dict=args["constant"]["max_frame_dict"], phase=PHASES
         )
         data_configs = {}
         for phase in PHASES:

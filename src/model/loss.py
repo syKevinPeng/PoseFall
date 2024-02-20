@@ -145,7 +145,13 @@ def compute_inter_phase_loss(phase_names,batch, loss_weights_dict):
         interpolated_joint_locs = torch.tensor(interpolated_joint_locs).to(DEVICE)
         
         # calculate the l2 difference between the actual location and the spline location
-        spline_loss = torch.mean(torch.square(joint_locs - interpolated_joint_locs))
+        # spline_loss = torch.mean(torch.square(joint_locs - interpolated_joint_locs))
+        last_frame_from_first_phase = pred_first_phase[:, -1, :].unsqueeze(1)
+        first_frame_from_second_phase = pred_second_phase[:, 0, :].unsqueeze(1)
+        joints_loc = torch.cat((last_frame_from_first_phase, first_frame_from_second_phase), dim=1)[:, :, :24, :]
+        _, joint_locs = smpl_model(joints_loc)
+        joint_locs = joint_locs[:, :, :24, :]
+        spline_loss = F.mse_loss(joint_locs[:, 0, ::], joint_locs[:, 1, ::])
         inter_phase_loss += spline_loss*loss_weights_dict["loc_loss_weight"]
         loss_dict.update({
             f"{first_phase}_{second_phase}_spline_loss": spline_loss.item()*loss_weights_dict["loc_loss_weight"],
