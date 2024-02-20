@@ -1,3 +1,4 @@
+from matplotlib import axis
 import numpy as np
 from scipy import linalg
 import torch
@@ -101,7 +102,7 @@ import torch
 import numpy as np
 
 
-def compute_hamming_score(self, batch):
+def compute_hamming_score(batch):
     # apply sigmoid to yhat
     yhat = torch.sigmoid(batch["yhat"]).round()
     ygt = batch["y"]
@@ -110,11 +111,13 @@ def compute_hamming_score(self, batch):
     return hamming / len(ygt)
 
 
-def compute_exact_match(self, batch):
+def compute_accuracy(batch):
     attr_size = batch["attribute_size"]
-    yhat = torch.sigmoid(batch["yhat"]).round()
+    yhat = torch.softmax(batch["yhat"], axis=1)
+    yhat = torch.argmax(yhat, axis=1)
     ygt = batch["y"]
-    return accuracy_score(ygt.cpu().numpy(), yhat.detach().cpu().numpy())
+    ygt = torch.argmax(ygt, axis=1)
+    return torch.sum(yhat == ygt).item()
 
 
 # from action2motion

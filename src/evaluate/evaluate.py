@@ -192,6 +192,7 @@ class EvalGTDataset(torch.utils.data.Dataset):
 
 if __name__ == "__main__":
     args = parse_args()
+    phase = args["evaluate_config"]["phase"]
     max_frame_dict = args["constant"]["max_frame_dict"]
     eval_dataset = EvaluateDataset(
         args,

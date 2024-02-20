@@ -73,6 +73,11 @@ class FallingDataset3Phase(Dataset):
             for col in label_col
             if any(col.startswith(att) for att in self.fall_phase_att)
         ]
+        self.attri_size = {
+            "impa": len(impact_label) - 1,
+            "glit": len(glitch_label) - 1,
+            "fall": len(fall_label) - 1,
+        }
         self.impact_label = self.label[impact_label]
         self.glitch_label = self.label[glitch_label]
         self.fall_label = self.label[fall_label]
@@ -205,6 +210,13 @@ class FallingDataset3Phase(Dataset):
             data_dict[f"{phase}_src_key_padding_mask"] = src_key_padding_mask
 
         return data_dict
+    
+    # get how many classes in each phase
+    def get_attr_size(self):
+        if len(self.phase) == 1:
+            return self.attri_size[self.phase[0]]
+        else:
+            return [self.attri_size[phase] for phase in self.phase]
 
 
 class FallingDataset1Phase(FallingDataset3Phase):

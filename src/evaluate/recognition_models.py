@@ -1,12 +1,12 @@
 import pathlib
 import attr
-from matplotlib.pylab import f
+from .metric import compute_accuracy, compute_hamming_score
 import torch
 import torch.nn as nn
 import argparse, yaml
 from tqdm import tqdm
 from pathlib import Path
-from ..dataloader import FallingDataset1Phase
+from ..dataloader import FallingDataset1Phase, FallingDataset3Phase
 from .stgcn import STGCN
 import wandb
 
@@ -88,44 +88,62 @@ class MotionDiscriminatorForFID(MotionDiscriminator):
         lin1 = self.linear1(out)
         lin1 = torch.tanh(lin1)
         return lin1
-
+    
 
 def get_model_and_dataloader(args):
-    # TODO creat train and test split
-    dataset = FallingDataset1Phase(
-        args["data_config"]["data_path"],
-        data_aug=True,
-        max_frame_dict=args["constant"]["max_frame_dict"],
-        split="train",
-    )
-    data_configs = {"combined": dataset[0]["combined_label"].size(0)}
-    num_frames, num_joints, feat_dim = dataset[0]["combined_combined_poses"].size()
+    train_dataset = FallingDataset1Phase(
+            args = args,
+            data_path = args["data_config"]["data_path"],
+            data_aug = True,
+            max_frame_dict = args["constant"]["max_frame_dict"],
+            split="train",
+        )
+    # since we are dealing with all phases
+    phase = "combined"
+    data_configs = {"num_class": train_dataset[0][f"{phase}_label"].size(0)}
+    num_frames, num_joints, feat_dim = train_dataset[0][f"{phase}_combined_poses"].size()
     data_configs.update(
         {"num_frames": num_frames, "num_joints": num_joints, "feat_dim": feat_dim}
     )
-    print(f'Output size: {data_configs["combined"]}')
-    dataloader = torch.utils.data.DataLoader(
-        dataset,
+    print(f'Output size: {data_configs["num_class"]}')
+    train_dataloader = torch.utils.data.DataLoader(
+        train_dataset,
         batch_size=args["recognition_config"]["batch_size"],
         shuffle=True,
         num_workers=4,
     )
-    attr_size = dataset.get_attr_size()
-    num_class = data_configs["combined"]
+    attr_size = train_dataset.get_attr_size()
+    print(f'Attribute size: {attr_size}')
+    num_class = data_configs["num_class"]
     # load STGCN model
     model = STGCN(
         in_channels=feat_dim,
         num_class=num_class,
         graph_args={"layout": "smpl", "strategy": "spatial"},
         edge_importance_weighting=True,
+        phase_output_size=attr_size,
         device=DEVICE,
     ).to(DEVICE)
+
+    eval_dataset = FallingDataset1Phase(
+        args = args,
+        data_path = args["data_config"]["data_path"],
+        data_aug = True,
+        max_frame_dict = args["constant"]["max_frame_dict"],
+        split="eval",
+    )
+    eval_dataloader = torch.utils.data.DataLoader(
+        eval_dataset,
+        batch_size=args["recognition_config"]["batch_size"],
+        shuffle=True,
+        num_workers=4,
+    )
     # model = MotionDiscriminator(data_configs["feat_dim"], hidden_size=256, hidden_layer=2, device=DEVICE, output_size=data_configs["combined"]).to(DEVICE)
-    return model, dataloader, attr_size, num_class
+    return model, train_dataloader, eval_dataloader, attr_size, num_class
 
 
 def train_evaluation_model(
-    args,
+    args
 ):
     """
     train a simple GRU model to evaluate the performance of the model
@@ -134,7 +152,7 @@ def train_evaluation_model(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     recognition_config = args["recognition_config"]
-    model, dataloader, attr_size, num_class = get_model_and_dataloader(args)
+    model, train_dataloader, evaluate_dataloader, attr_sizes, num_class = get_model_and_dataloader(args)
 
     # load pretrain weights
     state_dict = torch.load(
@@ -151,16 +169,17 @@ def train_evaluation_model(
     for epoch in range(recognition_config["epochs"]):
         epoch_loss = 0
         cum_loss_dict = {}
-        for i_batch, data_dict in tqdm(enumerate(dataloader)):
+        for i_batch, data_dict in tqdm(enumerate(train_dataloader)):
             optimizer.zero_grad()
             # input_shape:  Batch, Num Joints, Angle Rep (6), Time
-            x = data_dict["combined_combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :]
+            x = data_dict[f"combined_combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :]
             input_dict = {
                 "x": x.to(DEVICE),
-                "y": data_dict["combined_label"].to(DEVICE),
-                "attribute_size": attr_size,
+                "y": data_dict[f"combined_label"].to(DEVICE),
+                "attribute_size": attr_sizes,
             }
             batch_output = model(input_dict)
+            # add a softmax layer to the output
             loss, loss_dict = model.compute_loss(batch_output)
             loss.backward()
             optimizer.step()
@@ -178,30 +197,25 @@ def train_evaluation_model(
         if (epoch + 1) % recognition_config["model_save_freq"] == 0:
             torch.save(model.state_dict(), output_dir / f"recognition_model_{epoch}.pt")
 
-    # evaluate the model
-    evaluate_dataset = FallingDataset1Phase(
-        args["data_config"]["data_path"],
-        data_aug=True,
-        max_frame_dict=args["constant"]["max_frame_dict"],
-        split="eval",
-    )
-    humming_score_list = []
-    total_label_item = 0
-    with torch.no_grad():
-        for batch in evaluate_dataset:
-            x = batch["combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :].to(DEVICE)
-            label = batch["label"].to(DEVICE)
-            input_dict = {"x": x, "y": label, "attribute_size": num_class}
-            output = model(input_dict)
-            pred = output["yhat"]
-            binarized_pred = torch.sigmoid(pred).round()
-            humming_score = torch.sum(binarized_pred == label).item()
-            total_label_item += label.size(0) * label.size(1)
-            humming_score_list.append(humming_score)
+        if (epoch + 1) % recognition_config["evaluation_freq"] == 0:
+            corr_pred_counter = 0
+            total_label_item = 0
+            with torch.no_grad():
+                for batch in evaluate_dataloader:
+                    x = batch[f"combined_combined_poses"].permute(0, 2, 3, 1)[:, :24, :, :].to(DEVICE)
+                    label = batch[f"combined_label"].to(DEVICE)
+                    input_dict = {"x": x, "y": label, "attribute_size": num_class}
+                    batch = model(input_dict)
+                    for i, attr in enumerate(attr_sizes):
+                        phase_pred = batch["yhat"][i]
+                        phase_gt = batch["y"][:,sum(attr_sizes[:i]): sum(attr_sizes[:i]) + attr]
+                        num_correct, num = model.compute_accuracy(phase_pred, phase_gt)
+                        corr_pred_counter += num_correct
+                        total_label_item += num
 
-    humming_score = sum(humming_score_list) / total_label_item
-    print(f"Humming score: {humming_score}")
-    wandb.log({"humming_score": humming_score})
+            accuracy = corr_pred_counter / total_label_item
+            print(f'Evaluate Accuracy: {accuracy}')
+            wandb.log({"evaluate accuracy": accuracy})
 
 
 def parse_args():
@@ -230,7 +244,7 @@ if __name__ == "__main__":
         mode=wandb_config["wandb_mode"],
         tags=wandb_config["wandb_tags"],
         name="recognition_training",
-        notes="training recognition model with GT data",
+        notes=wandb_config["wandb_description"],
+        
     )
-
     train_evaluation_model(args)

@@ -5,8 +5,30 @@ import torch.nn.functional as F
 
 from .stgcnutils.tgcn import ConvTemporalGraphical
 from .stgcnutils.graph import Graph
-from .metric import compute_hamming_score, compute_exact_match
+from .metric import compute_hamming_score, compute_accuracy
 __all__ = ["STGCN"]
+
+class SequentialModel(nn.Module):
+    def __init__(self, input_size, hidden_size, phase_output_sizes, num_layers):
+        super().__init__()
+        self.gru = nn.GRU(input_size, hidden_size, num_layers, batch_first=True)
+        self.phase_fc_layers = nn.ModuleList([nn.Linear(hidden_size, size) for size in phase_output_sizes])
+
+
+    def forward(self, x):
+        phase_outputs = []
+        hidden = None  # Initialize hidden state to None, letting GRU set initial state
+        for fc in self.phase_fc_layers:
+            # Pass x and the current hidden state to the GRU
+            # GRU returns the output and the new hidden state
+            x, hidden = self.gru(x, hidden)  # Pass the same hidden state across iterations
+            # Assuming x has shape (batch, seq_len, hidden_size), take the last sequence output for classification
+            last_seq_output = x[:, -1, :]
+            phase_output = fc(last_seq_output)
+            phase_outputs.append(phase_output)
+            # Optionally, reshape phase_output to match the input dimensions for the next phase prediction
+            # This might involve expanding dimensions or adding sequence length as 1 if needed
+        return phase_outputs
 
 
 class STGCN(nn.Module):
@@ -27,7 +49,7 @@ class STGCN(nn.Module):
             :math:`M_{in}` is the number of instance in a frame.
     """
 
-    def __init__(self, in_channels, num_class, graph_args,
+    def __init__(self, in_channels, num_class, graph_args, phase_output_size,
                  edge_importance_weighting, device, **kwargs):
         super().__init__()
 
@@ -72,6 +94,9 @@ class STGCN(nn.Module):
         # fcn for prediction
         self.fcn = nn.Conv2d(256, num_class, kernel_size=1)
 
+        # initialize RNN
+        self.rnn = SequentialModel(input_size = 256, hidden_size = 256, phase_output_sizes=phase_output_size, num_layers=4)
+
     def forward(self, batch):
         # TODO: use mask
         # Received batch["x"] as
@@ -104,32 +129,54 @@ class STGCN(nn.Module):
 
         # features
         batch["features"] = x.squeeze()
-        
-        # prediction
-        x = self.fcn(x)
-        x = x.view(x.size(0), -1)
+
+        # RNN
+        x = x.view(N, -1, 256)
+        x = self.rnn(x)
+
+
+        # # prediction
+        # x = self.fcn(x)
+        # x = x.view(x.size(0), -1)
         batch["yhat"] = x
         return batch
-
-    # def compute_accuracy(self, batch):
-    #     # confusion = torch.zeros(self.num_class, self.num_class, dtype=int).to(self.device)
+    
+    # def compute_accuracy(self, yhat, ygt):
+    #     confusion = torch.zeros(self.num_class, self.num_class, dtype=int)
     #     # yhat = batch["yhat"].max(dim=1).indices
-    #     # ygt = batch["y"]
-    #     # for label, pred in zip(ygt, yhat):
-    #     #     confusion[label][pred] += 1
-    #     # accuracy = torch.trace(confusion)/torch.sum(confusion)
-    #     # return accuracy
-    #     return 0
+    #     # ygt = batch["y"].max(dim=1).indices
+    #     yhat = yhat.cpu().detach()
+    #     ygt = ygt.cpu().detach().to(torch.int64)
+    #     for label, pred in zip(ygt, yhat):
+    #         confusion[label][pred] += 1
+    #     accuracy = torch.trace(confusion)/torch.sum(confusion)
+    #     return accuracy
+    def compute_accuracy(self, yhat, ygt):
+        yhat= yhat.max(dim=1).indices
+        ygt = ygt.max(dim=1).indices
+        num_correct = torch.sum(yhat == ygt)
+        total_num = ygt.size(0)
+        return num_correct, total_num
         
     def compute_loss(self, batch):
-        criterion = nn.BCEWithLogitsLoss()
-        attr_size = batch["attribute_size"]
-        loss = criterion(batch["yhat"], batch["y"])
-        humming_acc = compute_hamming_score(batch)
-        exact_match_acc = compute_exact_match(batch)
+        criterion = nn.CrossEntropyLoss()
+        attr_sizes = batch["attribute_size"]
+        losses = 0
+        total_num_correct = 0
+        total_num = 0
+        for i, attr in enumerate(attr_sizes):
+            phase_pred = batch["yhat"][i]
+            phase_gt = batch["y"][:,sum(attr_sizes[:i]): sum(attr_sizes[:i]) + attr]
+            # print(f'current length: {attr} is from {sum(attr_sizes[:i])} to {sum(attr_sizes[:i]) + attr}')
+            assert phase_pred.shape == phase_gt.shape
+            loss = criterion(phase_pred, phase_gt)
+            losses += loss
+            num_correct, num = self.compute_accuracy(phase_pred, phase_gt)
+            total_num_correct += num_correct
+            total_num += num
+        acc = num_correct/total_num
         loss_dict = {"loss": loss.item(),
-                  "hamming_accuracy": humming_acc,
-                  "exact_match_accuracy": exact_match_acc}
+                     "accuracy": acc.item()}
         return loss, loss_dict
 
 
