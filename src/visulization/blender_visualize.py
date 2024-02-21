@@ -91,7 +91,9 @@ argv = sys.argv
 argv = argv[argv.index("--") + 1:]
 input_csv_path = str(argv[0])
 output_directory = str(argv[1])
+output_format = str(argv[2])
 print(f'processing input csv file: {input_csv_path}')
+assert output_format in ['image', 'video'], "output format must be either 'image' or 'video'"
 
 
 # Create a new SMPL armature and let it move acccording to recorded data
@@ -156,12 +158,20 @@ light_data.energy = 1000
 if not os.path.exists(output_directory):
     os.makedirs(output_directory)
 
-# Set render settings
-bpy.context.scene.render.image_settings.file_format = 'PNG'
+# saving as image
+if output_format == "image":
+    # Set render settings
+    bpy.context.scene.render.image_settings.file_format = 'PNG'
 
-# Render each frame and save as PNG
-for frame in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
-    bpy.context.scene.frame_set(frame)
-    bpy.context.scene.render.filepath = os.path.join(output_directory, f"frame_{frame:03d}.png")
-    bpy.ops.render.render(write_still=True)
-
+    # # Render each frame and save as PNG
+    for frame in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
+        bpy.context.scene.frame_set(frame)
+        bpy.context.scene.render.filepath = os.path.join(output_directory, f"frame_{frame:03d}.png")
+        bpy.ops.render.render(write_still=True)
+if output_format == "video":
+    # Set render settings
+    bpy.context.scene.render.image_settings.file_format = 'FFMPEG'
+    bpy.context.scene.render.ffmpeg.format = 'MPEG4'
+    bpy.context.scene.render.ffmpeg.codec = 'H264'
+    bpy.context.scene.render.filepath = os.path.join(output_directory, "video_rendering", input_csv_path.split('/')[-1].split('.')[0] + ".mp4")
+    bpy.ops.render.render(animation=True)

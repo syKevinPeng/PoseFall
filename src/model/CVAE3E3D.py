@@ -48,29 +48,7 @@ class CVAE3E3D(nn.Module):
         self.config = config
         self.fusion_layer = nn.Linear(in_features=self.latent_dim*len(self.phase_names), out_features=self.latent_dim*len(self.phase_names))
         print(f"CAVE model initialized with phases: {self.phase_names}")
-
-    # def reparameterize(self, batch, phase_name, seed=0):
-    #     """
-    #     reparameterize the latent variable
-    #     """
-    #     combined_mu = torch.cat([batch[f"{phase}_mu"] for phase in self.phase_names], dim=1)
-    #     combined_sigma = torch.cat([batch[f"{phase}_sigma"] for phase in self.phase_names], dim=1)
-    #     # remove phase_mu and phase_sigma from batch
-    #     for phase in self.phase_names:
-    #         batch.pop(f"{phase}_mu")
-    #         batch.pop(f"{phase}_sigma")
-    #     batch.update({"combined_mu": combined_mu, "combined_sigma": combined_sigma})
-    #     std = torch.exp(combined_sigma / 2)
-
-    #     if seed is None:
-    #         eps = std.data.new(std.size()).normal_()
-    #     else:
-    #         generator = torch.Generator(device=self.device)
-    #         generator.manual_seed(seed)
-    #         eps = std.data.new(std.size()).normal_(generator=generator)
-
-    #     z = eps.mul(std).add_(combined_mu)
-    #     return z
+        
     def reparameterize(self, batch, phase_name, seed=0):
         """
         reparameterize the latent variable
@@ -106,15 +84,6 @@ class CVAE3E3D(nn.Module):
             encoder_output_list.extend([encoder_output[f"{phase}_mu"], encoder_output[f"{phase}_sigma"]])
             batch.update(encoder_output)
 
-        # # fuse the encoder output by concate output layers and project to 3 mus and 3 sigmas
-        # concated_output = torch.cat(encoder_output_list, dim=1).to(self.device)
-        # fuse_layer = nn.Linear(concated_output.size(1), concated_output.size(1)).to(self.device)
-        # fused_output = fuse_layer(concated_output).reshape(batch_size, 6, -1)
-        # # assign mu and sigma back to the batch
-        # for i, phase in enumerate(self.phase_names):
-        #     batch[f"{phase}_mu"] = fused_output[:, 2*i, :]
-        #     batch[f"{phase}_sigma"] = fused_output[:, 2*i+1, :]
-
         for phase in self.phase_names:
             # reparameterize
             batch[f"{phase}_z"] = self.reparameterize(batch, phase_name=phase) # shape(batch_size, latent_dim)
@@ -128,13 +97,6 @@ class CVAE3E3D(nn.Module):
             # Decoder
             batch.update(getattr(self, f"{phase}_decoder")(batch))
         return batch
-
-    # def return_latent(self, batch):
-    #     # encode
-    #     batch.update(self.encoder(batch))
-    #     # reparameterize
-    #     batch[f"z"] = self.reparameterize(batch)
-    #     return batch["z"]
     
 
     def compute_loss(self, batch):

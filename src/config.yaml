@@ -1,4 +1,4 @@
-define: &exp_name "exp_4"
+define: &exp_name "exp_5"
 
 train_config:
   epochs: 3000
@@ -26,7 +26,7 @@ loss_config:
   human_model_loss_weight: 1
   vertex_loss_weight: 1
   kl_loss_weight: 0.00001
-  loc_loss_weight: 1
+  loc_loss_weight: 2
   var_loss_weight: 0.5
 
 constant:
