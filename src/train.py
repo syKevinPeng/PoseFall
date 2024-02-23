@@ -12,6 +12,7 @@ from .dataloader import FallingDataset3Phase, FallingDataset1Phase
 from .model.CVAE3E3D import CVAE3E3D
 from .model.CVAE3E1D import CVAE3E1D
 from .model.CVAE1E1D import CVAE1E1D
+from .model.CVAE3E3D_RNN import CVAE3E3D_RNN
 from icecream import ic
 import wandb, yaml
 from pathlib import Path
@@ -70,7 +71,20 @@ def get_model_and_dataset(args):
             "num_joints": num_joints, "feat_dim": feat_dim, 
         })
         model = CVAE3E3D(data_config_dict=data_configs, config=args).to(DEVICE)
-
+    elif model_name == "CVAE3E3D_RNN":
+        dataset = FallingDataset3Phase( args=args, 
+        data_path=args["data_config"]["data_path"], data_aug=train_config["data_aug"], max_frame_dict=args["constant"]["max_frame_dict"], phase=PHASES
+        )
+        data_configs = {}
+        for phase in PHASES:
+            num_frames, num_joints, feat_dim = dataset[0][f"{phase}_combined_poses"].size()
+            data_configs.update({
+                phase:{"num_frames": num_frames, "label_size":dataset[0][f"{phase}_label"].size(0)}
+            })
+        data_configs.update({
+            "num_joints": num_joints, "feat_dim": feat_dim, 
+        })
+        model = CVAE3E3D_RNN(data_config_dict=data_configs, config=args).to(DEVICE)
     elif model_name== "CVAE3E1D":
         dataset = FallingDataset3Phase(
         args["data_config"]["data_path"], data_aug=train_config["data_aug"], max_frame_dict=args["constant"]["max_frame_dict"]
