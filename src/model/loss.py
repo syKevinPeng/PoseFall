@@ -159,3 +159,13 @@ def compute_inter_phase_loss(phase_names,batch, loss_weights_dict):
         })
 
     return inter_phase_loss, loss_dict
+
+def compute_init_pose_loss(batch, phase_name, weight_dict):
+    """
+    compute the l2 loss between the initial pose and the first frame pose
+    """
+    gt_init_pose = batch[f'{phase_name}_init_pose']
+    pred_init_pose = batch[f'{phase_name}_output'][:, 0, :]
+    loss = F.mse_loss(gt_init_pose, pred_init_pose)*weight_dict["init_pose_loss_weight"]
+    loss_dict = {f"{phase_name}_init_pose_loss": loss.item()}
+    return loss, loss_dict
