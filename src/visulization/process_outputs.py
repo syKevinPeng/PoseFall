@@ -4,7 +4,7 @@ from tqdm import tqdm
 import imageio
 import numpy as np
 # input dir
-input_dir = "/home/siyuan/research/PoseFall/gen_results_3E3D_20"
+input_dir = "/home/siyuan/research/PoseFall/gen_results_exp6_RNN"
 generate_images = False
 generate_videos = True
 
@@ -45,7 +45,6 @@ if generate_videos:
     for csv_file in tqdm(all_input_files, desc="Processing files using Blender. Generate videos"):
         # run blender
         subprocess.run(["blender", "-b", "-P", "blender_visualize.py", "--", str(csv_file), str(output_dir), "video"])
-        exit()
 
 
 

@@ -1,4 +1,4 @@
-define: &exp_name "exp_5 "
+define: &exp_name "exp_6"
 
 train_config:
   epochs: 3000
@@ -10,11 +10,11 @@ train_config:
   data_aug: True
 
 wandb_config:
-  wandb_mode: 'disabled'
+  wandb_mode: 'online'
   wandb_project: 'posefall'
   wandb_exp_name: *exp_name
   wandb_tags: [*train_model_type, 'train']
-  wandb_description: "CVAE + RNN: With data aug. Pretrained weights of uestc on Encoder and decoder."
+  wandb_description: "CVAE + RNN: feature combineation method: Addition."
 
 data_config:
   data_path: &data_path "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
@@ -29,7 +29,7 @@ loss_config:
   loc_loss_weight: 2
   var_loss_weight: 0.5
   init_pose_loss_weight: 1
-  
+
 constant:
   PHASES:
     - 'impa'
@@ -54,17 +54,19 @@ generate_config:
   # ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240109_012926-zjoxy2jq/files/2024-01-09_01-29-27_exp_0/epoch_1999.pth"
   # 3E3D checkpoint   
   # ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240109_192054-obzeak8j/files/2024-01-09_19-20-55_exp_3/epoch_2999.pth"
-  ckpt_path: "/home/siyuan/research/PoseFall/train_exps/2024-02-20_01-48-06_exp_4/epoch_2999.pth"
+  # ckpt_path: "/home/siyuan/research/PoseFall/train_exps/2024-02-20_01-48-06_exp_4/epoch_2999.pth"
+  # exps 6: 3E3D_RNN + concatentation
+  ckpt_path : "/home/siyuan/research/PoseFall/train_exps/2024-02-24_12-27-03_exp_6/epoch_2999.pth"
   data_path: *data_path
-  output_path: "./gen_results_3E3D_20"
+  output_path: "./gen_results_exp6_RNN"
   num_to_gen: 20
-  model_type: &eval_model_type 'CVAE3E3D'
+  model_type: &eval_model_type 'CVAE3E3D_RNN'
   wandb_config:
     wandb_mode: 'disabled'
     wandb_project: 'posefall'
     wandb_exp_name: *exp_name
     wandb_tags: [*eval_model_type, 'eval']
-    wandb_description:  "Vanilla CVAE: With no data aug. Pretrained weights of uestc on Encoder and decoder."
+    wandb_description:  ""
 
 recognition_config:
   pretrained_weights: "/home/siyuan/research/PoseFall/src/model/pretrained_models/recognition/uestc_rot6d_stgcn.tar"

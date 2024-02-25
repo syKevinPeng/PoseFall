@@ -22,7 +22,7 @@ python -m src.evaluate.evaluate
 ```
 
 ### Visualization
-Before running the visulization script, which uses blender (make sure you have it installed), making sure that the input dir is set.
+Before running the visulization script, which uses blender (make sure you have it installed), making sure that the input dir at the top of the script is set.
 
 ```bash
 cd src/visualization

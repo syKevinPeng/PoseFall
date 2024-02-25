@@ -66,7 +66,10 @@ class CVAE3E3D_RNN(nn.Module):
         batch[f"{phase}_label"] = batch[f"{phase}_label"].to(self.device)
         batch[f"{phase}_src_key_padding_mask"] = batch[f"{phase}_src_key_padding_mask"].to(self.device)
         # add initial pose to the input batch
-        batch[f'{phase}_init_pose'] = batch[f"{phase}_combined_poses"][:, 0, :].to(self.device)
+        if phase == self.phase_names[0]:
+            batch[f'{phase}_init_pose'] = torch.zeros_like(batch[f"{phase}_combined_poses"][:, 0, :]).to(self.device)
+        else:
+            batch[f'{phase}_init_pose'] = batch[f"{phase}_combined_poses"][:, 0, :].to(self.device)
         return batch
     
     def forward(self, batch):
@@ -100,6 +103,29 @@ class CVAE3E3D_RNN(nn.Module):
             losses.append(total_loss)
             loss_dict[f"{phase}_total_loss"] = total_loss.item()
         return losses, loss_dict
+    
 
+    def generate(self, batch):
+        """
+        generate the output from the model. Different from 3E3D, we need to generate sequentially
+        """
+        batch_size = batch[f"{self.phase_names[0]}_label"].size(0)
+        model_input_batch = {}
+        for phase in self.phase_names:
+            # sample noise
+            z = torch.randn(batch_size, self.latent_dim).to(self.device)
+            model_input_batch[f"{phase}_z"] = z
+            model_input_batch[f"{phase}_label"] = batch[f"{phase}_label"]
+            model_input_batch[f"{phase}_src_key_padding_mask"] = batch[f"{phase}_mask"]
+            # add initial pose to the input batch
+            if phase == self.phase_names[0]:
+                model_input_batch[f'{phase}_init_pose'] = torch.zeros(batch_size, 1, self.num_joints, self.feat_dim).to(self.device)
+            else:
+                last_phase_name = self.phase_names[self.phase_names.index(phase)-1]
+                model_input_batch[f'{phase}_init_pose'] = model_input_batch[f"{last_phase_name}_output"][:, -1, :].to(self.device)
+
+            model_input_batch.update(getattr(self, f"{phase}_decoder")(model_input_batch))
+        return model_input_batch
+        
 
         

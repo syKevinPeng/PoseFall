@@ -6,6 +6,7 @@ from .dataloader import FallingDataset3Phase, FallingDataset1Phase
 from .model.CVAE3E3D import CVAE3E3D
 from .model.CVAE3E1D import CVAE3E1D
 from .model.CVAE1E1D import CVAE1E1D
+from .model.CVAE3E3D_RNN import CVAE3E3D_RNN
 from icecream import ic
 import pandas as pd
 from .data_processing.utils import (
@@ -82,7 +83,7 @@ def get_model_and_dataset(args):
     train_config = args["generate_config"]
     # ======================== actual training pipeline ========================
     # Initialize model and optimizer
-    if model_name == "CVAE3E3D":
+    if model_name == "CVAE3E3D" or model_name == "CVAE3E3D_RNN":
         dataset = FallingDataset3Phase(
             args,
             args["data_config"]["data_path"],
@@ -109,7 +110,10 @@ def get_model_and_dataset(args):
                 "feat_dim": feat_dim,
             }
         )
-        model = CVAE3E3D(data_config_dict=data_configs, config=args).to(DEVICE)
+        if model_name == "CVAE3E3D":
+            model = CVAE3E3D(data_config_dict=data_configs, config=args).to(DEVICE)
+        elif model_name == "CVAE3E3D_RNN":
+            model = CVAE3E3D_RNN(data_config_dict=data_configs, config=args).to(DEVICE)
         input_type = "seperated"
     elif model_name == "CVAE3E1D":
         dataset = FallingDataset3Phase(
@@ -239,8 +243,9 @@ if __name__ == "__main__":
         label_str = "".join([str(int(i)) for i in label[0].cpu().numpy()])
         for i in range(generate_config["num_to_gen"]):
             genreated_batch = model.generate(input_batch)
+            model_type = generate_config["model_type"]
             # genreated_batch["output"] = data_dict["combined_combined_poses"].reshape(1, 430, 156).to(DEVICE)
-            if generate_config["model_type"] == "CVAE3E3D":
+            if model_type == "CVAE3E3D" or model_type == "CVAE3E3D_RNN":
                 whole_sequences = []
                 for phase in PHASES:
                     model_output = genreated_batch[f"{phase}_output"]
@@ -257,8 +262,8 @@ if __name__ == "__main__":
                     whole_sequences.append(phase_output)
                 whole_sequences = torch.concat(whole_sequences, axis=1)
             elif (
-                generate_config["model_type"] == "CVAE3E1D"
-                or generate_config["model_type"] == "CVAE1E1D"
+                model_type == "CVAE3E1D"
+                or model_type == "CVAE1E1D"
             ):
                 whole_sequences = genreated_batch["combined_output"]
                 whole_sequences = whole_sequences
