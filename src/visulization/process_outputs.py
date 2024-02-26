@@ -13,7 +13,7 @@ if not config_file.exists():
 config = yaml.safe_load(config_file.open())
 # input dir
 # input_dir = config["generate_config"]["output_path"]
-input_dir = "/home/siyuan/research/PoseFall/gen_results_exp7_RNN"
+input_dir = "/home/siyuan/research/PoseFall/gen_results_exp8_RNN"
 print(f'Loading poses from {input_dir}')
 generate_images = False
 generate_videos = True

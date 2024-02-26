@@ -1,4 +1,4 @@
-define: &exp_name "exp_8"
+define: &exp_name "exp_9"
 
 train_config:
   epochs: 2000
@@ -10,11 +10,11 @@ train_config:
   data_aug: True
 
 wandb_config:
-  wandb_mode: 'disabled'
+  wandb_mode: 'online'
   wandb_project: 'posefall'
   wandb_exp_name: *exp_name
   wandb_tags: [*train_model_type, 'train']
-  wandb_description: "CVAE + RNN: feature combineation method: concate. Initial Pose Loss: param + reconstruction. model param loss for init pose increased to 2"
+  wandb_description: "CVAE + RNN: feature combineation method: concate. Initial Pose Loss: param + reconstruction. model param loss for init pose increased to 5"
 
 data_config:
   data_path: &data_path "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
@@ -31,7 +31,7 @@ loss_config:
   loc_loss_weight: 2
   var_loss_weight: 0.5
   # initial pose loss
-  init_pose_param_loss_weight: 2
+  init_pose_param_loss_weight: 5
   init_pose_vertex_loss_weight: 1
 
 constant:
@@ -63,8 +63,10 @@ generate_config:
   # ckpt_path : "/home/siyuan/research/PoseFall/train_exps/2024-02-24_12-27-03_exp_6/epoch_2999.pth"
   # exps7: 3E3D_RNN + init loss (model param + vertex) + addition
   # ckpt_path : /home/siyuan/research/PoseFall/train_exps/2024-02-25_13-30-02_exp_7/epoch_1999.pth
+  # exps8: 3E3D_RNN + init loss (model param + vertex) + addition + increased init pose loss
+  ckpt_path: "/home/siyuan/research/PoseFall/train_exps/2024-02-26_01-00-49_exp_8/epoch_1999.pth"
   data_path: *data_path
-  output_path: "./gen_results_exp7_RNN"
+  output_path: "./gen_results_exp8_RNN"
   num_to_gen: 20
   model_type: &eval_model_type 'CVAE3E3D_RNN'
   wandb_config:
