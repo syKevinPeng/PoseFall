@@ -38,7 +38,7 @@ class DecodeWithInitPose(nn.Module):
         self.input_feats = input_feature_dim
         self.njoints = njoints
         self.nfeats = nfeats
-        self.actionBiases = nn.Parameter(torch.randn(self.num_classes, self.latent_dim))
+        self.actionBiases = nn.Parameter(torch.randn(self.num_classes, self.latent_dim//2)) # modified for concatenation
 
         self.seqTransDecoderLayer = nn.TransformerDecoderLayer(
             d_model=self.latent_dim,
@@ -54,7 +54,8 @@ class DecodeWithInitPose(nn.Module):
         self.finallayer = nn.Linear(
             in_features=self.latent_dim, out_features=self.input_feats
         )
-        self.skelEmbedding = nn.Linear(in_features=self.njoints*self.nfeats, out_features=self.latent_dim)
+        self.skelEmbedding = nn.Linear(in_features=self.njoints*self.nfeats, out_features=self.latent_dim//2)# modified for concatenation
+
 
     def forward(self, batch):
         z = batch[f"{self.phase_names}_z"]
@@ -63,7 +64,6 @@ class DecodeWithInitPose(nn.Module):
         init_pose = init_pose.reshape(-1, self.njoints*self.nfeats)
         mask = batch[f"{self.phase_names}_src_key_padding_mask"]
         mask = mask.bool()
-        latent_dim = z.size(1)
         bs, nframes = mask.shape
 
         # shift the latent noise vector to be the action noise
@@ -73,10 +73,9 @@ class DecodeWithInitPose(nn.Module):
 
         # TODO experiment on the effect of adding and concatenating
         # Adding the initial pose to the latent vector
-        z = shifted_z[None] + init_pose  # sequence of size 1
-        # z = torch.concat([shifted_z[None], init_pose], dim = -1)  # sequence of size 1
-
-        timequeries = torch.zeros(nframes, bs, latent_dim, device=z.device)
+        # z = shifted_z[None] + init_pose  # sequence of size 1
+        z = torch.concat([shifted_z[None], init_pose], dim = -1)  # sequence of size 1
+        timequeries = torch.zeros(nframes, bs, self.latent_dim, device=z.device)
 
         # only for ablation / not used in the final model
         timequeries = self.sequence_pos_encoder(timequeries)

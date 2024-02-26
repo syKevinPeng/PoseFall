@@ -26,7 +26,6 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        # not used in the final model
         x = x + self.pe[:x.shape[0], :]
         x = self.dropout(x)
         return x

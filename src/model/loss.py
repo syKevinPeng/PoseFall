@@ -166,6 +166,11 @@ def compute_init_pose_loss(batch, phase_name, weight_dict):
     """
     gt_init_pose = batch[f'{phase_name}_init_pose']
     pred_init_pose = batch[f'{phase_name}_output'][:, 0, :]
-    loss = F.mse_loss(gt_init_pose, pred_init_pose)*weight_dict["init_pose_loss_weight"]
-    loss_dict = {f"{phase_name}_init_pose_loss": loss.item()}
+    param_loss = F.mse_loss(gt_init_pose,pred_init_pose)*weight_dict["init_pose_param_loss_weight"]
+    # reconstruct the initial pose
+    recon_loss = vertex_loss(gt_init_pose[:, :24, :], pred_init_pose[:, :24, :])*weight_dict["init_pose_vertex_loss_weight"]
+    loss = param_loss + recon_loss
+    loss_dict = {f"{phase_name}_init_pose_loss": param_loss.item(),
+                                    f"{phase_name}_init_pose_recon_loss": recon_loss.item(),
+                                    f"{phase_name}_total_init_pose_loss": loss.item()}
     return loss, loss_dict

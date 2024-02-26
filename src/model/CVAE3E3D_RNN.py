@@ -34,7 +34,7 @@ class CVAE3E3D_RNN(nn.Module):
                 f"{phase}_decoder",
                 DecodeWithInitPose(num_classes=data_config_dict[phase]["label_size"], 
                         phase_names=phase, 
-                        latent_dim=self.latent_dim, 
+                        latent_dim=self.latent_dim*2, 
                         njoints=data_config_dict["num_joints"], 
                         nfeats=data_config_dict["feat_dim"],
                         input_feature_dim=self.num_joints*self.feat_dim)
@@ -96,7 +96,10 @@ class CVAE3E3D_RNN(nn.Module):
         losses = []
         for phase in self.phase_names:
             in_phase_loss, loss_dict_1 = compute_in_phase_loss(batch, phase_name = phase, weight_dict=self.config['loss_config'])
-            init_pose_loss, loss_dict_2 = compute_init_pose_loss(batch, phase_name = phase, weight_dict=self.config['loss_config'])
+            if phase == self.phase_names[0]:
+                init_pose_loss, loss_dict_2 = 0, {}
+            else:
+                init_pose_loss, loss_dict_2 = compute_init_pose_loss(batch, phase_name = phase, weight_dict=self.config['loss_config'])
             total_loss = in_phase_loss + init_pose_loss
             loss_dict.update(loss_dict_1)
             loss_dict.update(loss_dict_2)

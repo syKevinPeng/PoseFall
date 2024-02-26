@@ -1,10 +1,20 @@
+from os import path
 from pathlib import Path
 import subprocess
 from tqdm import tqdm
 import imageio
 import numpy as np
+import yaml
+# load config file
+config_file = Path("/home/siyuan/research/PoseFall/src/config.yaml")
+if not config_file.exists():
+    raise Exception("config file does not exist.")
+# load config file
+config = yaml.safe_load(config_file.open())
 # input dir
-input_dir = "/home/siyuan/research/PoseFall/gen_results_exp6_RNN"
+# input_dir = config["generate_config"]["output_path"]
+input_dir = "/home/siyuan/research/PoseFall/gen_results_exp7_RNN"
+print(f'Loading poses from {input_dir}')
 generate_images = False
 generate_videos = True
 
