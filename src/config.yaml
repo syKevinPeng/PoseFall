@@ -1,4 +1,4 @@
-define: &exp_name "exp_9"
+define: &exp_name "exp_10"
 
 train_config:
   epochs: 2000
@@ -14,7 +14,7 @@ wandb_config:
   wandb_project: 'posefall'
   wandb_exp_name: *exp_name
   wandb_tags: [*train_model_type, 'train']
-  wandb_description: "CVAE + RNN: feature combineation method: concate. Initial Pose Loss: param + reconstruction. model param loss for init pose increased to 5"
+  wandb_description: "CVAE + RNN: feature combineation method: concate. Initial Pose Loss: param + reconstruction. model param loss for init pose increased to 5. Add rotation and translation to reconstruction loss"
 
 data_config:
   data_path: &data_path "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
@@ -31,7 +31,7 @@ loss_config:
   loc_loss_weight: 2
   var_loss_weight: 0.5
   # initial pose loss
-  init_pose_param_loss_weight: 5
+  init_pose_param_loss_weight: 1
   init_pose_vertex_loss_weight: 1
 
 constant:

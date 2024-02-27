@@ -19,20 +19,30 @@ class SMPLModel(nn.Module):
             creat_body_pose=True,
         ).to(DEVICE)
 
-    def forward(self, batch):
+    def forward(self, batch, rotation_and_transl = False):
         """
         we discard the locationa and rotation of the armature. 
         Only calculate the vertex transformation resulted from joint rotation
         """
         # parsed_output = parse_output(batch)
         # bone_rot = parsed_output["bone_rot"]
+        # check the shape of the rotation and translation
+        if rotation_and_transl:
+            translation = batch[:, 24, :3]
+            rotation = batch[:, 25, :]
+            rotation = rotation_6d_to_matrix(rotation)
+            batch = batch[:, :24, :]
+        else:
+            rotation = translation = None
+        if batch.size(-2) != 24:
+            raise ValueError(f"The poses should have 24 joints, but the have the shape of {batch.size()}")
         batch_size = batch.size(0)
         bone_rot = batch
         # convert continuous rotation representationt to rotation matrix
         bone_rot = rotation_6d_to_matrix(bone_rot)
         # body pose shape requirement: BxJx3x3
         body_pose = bone_rot.reshape(-1, 24, 3, 3)[:, 1:, :, :]
-        SMPL_output = self.human_model(body_pose = body_pose, return_verts=True)
+        SMPL_output = self.human_model(body_pose = body_pose, return_verts=True, transl = translation, global_orient = rotation)
         verts = SMPL_output.vertices
         joint_locs = SMPL_output.joints
         verts = verts.reshape(batch_size, -1, verts.size(-2), verts.size(-1))
@@ -52,15 +62,15 @@ def kl_divergence(mu, logvar):
     """
     return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
-def vertex_loss(pred_batch, input_batch):
+def vertex_loss(pred_batch, input_batch, with_trans_rot = False):
     """
     vertex loss: we ignore the translation and rotation of the armature. Only calculate the vertex transformation
     """
     # initialize SMPL model
     smpl_model = SMPLModel().eval().to(DEVICE)
     # get the vertex locations
-    pred_vertex_locs, _ = smpl_model(pred_batch)
-    gt_vertex_locs,_ = smpl_model(input_batch)
+    pred_vertex_locs, _ = smpl_model(pred_batch, rotation_and_transl = with_trans_rot )
+    gt_vertex_locs,_ = smpl_model(input_batch, rotation_and_transl = with_trans_rot)
     # compute the vertex loss
     vertex_locs = F.mse_loss(pred_vertex_locs, gt_vertex_locs, reduction="mean")
     return vertex_locs
@@ -168,7 +178,7 @@ def compute_init_pose_loss(batch, phase_name, weight_dict):
     pred_init_pose = batch[f'{phase_name}_output'][:, 0, :]
     param_loss = F.mse_loss(gt_init_pose,pred_init_pose)*weight_dict["init_pose_param_loss_weight"]
     # reconstruct the initial pose
-    recon_loss = vertex_loss(gt_init_pose[:, :24, :], pred_init_pose[:, :24, :])*weight_dict["init_pose_vertex_loss_weight"]
+    recon_loss = vertex_loss(gt_init_pose[:, :26, :], pred_init_pose[:, :26, :], with_trans_rot=True)*weight_dict["init_pose_vertex_loss_weight"]
     loss = param_loss + recon_loss
     loss_dict = {f"{phase_name}_init_pose_loss": param_loss.item(),
                                     f"{phase_name}_init_pose_recon_loss": recon_loss.item(),
