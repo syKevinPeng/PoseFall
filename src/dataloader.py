@@ -123,6 +123,12 @@ class FallingDataset3Phase(Dataset):
             data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]]
             - data[["arm_loc_x", "arm_loc_y", "arm_loc_z"]].iloc[0]
         )
+        if self.data_aug:
+        # add randomly rotation to the z-axis.
+            random_rotation = np.random.uniform(-np.pi / 2, np.pi / 2)
+            data["arm_rot_z"] += random_rotation
+            data["arm_rot_z"] = data["arm_rot_z"] % (2 * np.pi)
+
         # selec the data that contains action phase information
         for phase in self.phase:
             phase_data = data[data["phase"] == phase]
@@ -145,7 +151,7 @@ class FallingDataset3Phase(Dataset):
                 phase_data = pd.DataFrame(
                     data=augmented_data, columns=phase_data.columns[1:-1]
                 )
-
+                
             if frame_length == 0:
                 ic(phase_data.head())
                 raise ValueError(f"{phase} frame length is 0. Data path is {path}")

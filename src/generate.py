@@ -87,7 +87,7 @@ def get_model_and_dataset(args):
         dataset = FallingDataset3Phase(
             args,
             args["data_config"]["data_path"],
-            data_aug=False,
+            data_aug=True, # TODO: change this to False
             max_frame_dict=args["constant"]["max_frame_dict"],
             phase=PHASES,
         )
@@ -223,6 +223,10 @@ if __name__ == "__main__":
                 "impa_mask": data_dict["impa_src_key_padding_mask"].to(DEVICE),
                 "glit_mask": data_dict["glit_src_key_padding_mask"].to(DEVICE),
                 "fall_mask": data_dict["fall_src_key_padding_mask"].to(DEVICE),
+                # # gt data
+                # "impa_combined_poses": data_dict["impa_combined_poses"].to(DEVICE),
+                # "glit_combined_poses": data_dict["glit_combined_poses"].to(DEVICE),
+                # "fall_combined_poses": data_dict["fall_combined_poses"].to(DEVICE),
             }
             batch_size = input_batch["impa_label"].size(0)
             label = torch.concatenate(
@@ -249,7 +253,8 @@ if __name__ == "__main__":
                 whole_sequences = []
                 for phase in PHASES:
                     model_output = genreated_batch[f"{phase}_output"]
-                    model_output = model_output
+                    # # TODO: remove this line
+                    # model_output = input_batch[f"{phase}_combined_poses"]
                     batch_size = model_output.size(0)
                     # remove padding
                     model_output = model_output[~(input_batch[f"{phase}_mask"].bool())]

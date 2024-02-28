@@ -181,7 +181,7 @@ def compute_init_pose_loss(batch, phase_name, weight_dict):
     recon_loss = vertex_loss(gt_init_pose[:, :26, :], pred_init_pose[:, :26, :], with_trans_rot=True)*weight_dict["init_pose_vertex_loss_weight"]
     # l2 loss on the translation and rotation
     human_center_loss = F.mse_loss(gt_init_pose[:, 24:26, :], pred_init_pose[:, 24:26, :])*weight_dict["init_pose_human_center_loss_weight"]
-    loss = param_loss + recon_loss + human_center_loss
+    loss = param_loss + recon_loss #+ human_center_loss
     loss_dict = {f"{phase_name}_init_pose_loss": param_loss.item(),
                                     f"{phase_name}_init_pose_recon_loss": recon_loss.item(),
                                     f"{phase_name}_init_pose_human_center_loss:": human_center_loss.item(),

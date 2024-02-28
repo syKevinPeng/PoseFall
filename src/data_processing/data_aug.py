@@ -53,24 +53,14 @@ scaled_fft_data = magnitudes * np.exp(1j*phases)
 sacled_bone_rot = np.fft.ifft(scaled_fft_data, axis=0)
 dataset = sacled_bone_rot.real.astype(float)
 print(dataset.shape)
-# # applying cubic spline interpolation
-# # Create spline interpolation for the start boundary
-# x = np.arange(pre_aug_start, pre_aug_end)
-# y_start = dataset[x, 7:].astype(float)
-# cs_start = CubicSpline(x, y_start, axis=0, bc_type='natural')
 
-# # Create spline interpolation for the end boundary
-# x = np.arange(post_aug_start, post_aug_end)
-# y_end = dataset[x, 7:].astype(float)
-# cs_end = CubicSpline(x, y_end, axis=0, bc_type='natural')
-
-# # Apply the interpolation to create a smooth transition
-# interp_start = cs_start(np.linspace(pre_aug_start, pre_aug_end, pre_aug_end - pre_aug_start))
-# interp_end = cs_end(np.linspace(post_aug_start, post_aug_end, post_aug_end - post_aug_start))
-
-# # Replace the boundary regions
-# dataset[pre_aug_start:pre_aug_end, 7:] = interp_start
-# dataset[post_aug_start:post_aug_end, 7:] = interp_end
+# add randomly z-axis rotation
+random_rotation = np.random.uniform(-np.pi/2, np.pi/2)
+# get the rotations
+rotations = dataset[:, 3].astype(float)
+rotations += random_rotation
+rotations = rotations % (2 * np.pi)
+dataset[:, 3] = rotations
 
 
 # loop through each frame

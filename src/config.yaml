@@ -1,4 +1,4 @@
-define: &exp_name "exp_11"
+define: &exp_name "exp_12"
 
 train_config:
   epochs: 2000
@@ -14,7 +14,7 @@ wandb_config:
   wandb_project: 'posefall'
   wandb_exp_name: *exp_name
   wandb_tags: [*train_model_type, 'train']
-  wandb_description: "CVAE + RNN: feature combineation method: concate. Initial Pose Loss: param + reconstruction. have human center loss for regularting the rotation and translation of the human."
+  wandb_description: "CVAE + RNN: feature combineation method: concate. Initial Pose Loss: param + reconstruction. Human Z-axis rotation augmentation added. Human Center Loss"
 
 data_config:
   data_path: &data_path "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
@@ -65,10 +65,14 @@ generate_config:
   # exps7: 3E3D_RNN + init loss (model param + vertex) + addition
   # ckpt_path : /home/siyuan/research/PoseFall/train_exps/2024-02-25_13-30-02_exp_7/epoch_1999.pth
   # exps8: 3E3D_RNN + init loss (model param + vertex) + addition + increased init pose loss
-  ckpt_path: "/home/siyuan/research/PoseFall/train_exps/2024-02-26_01-00-49_exp_8/epoch_1999.pth"
+  # ckpt_path: "/home/siyuan/research/PoseFall/train_exps/2024-02-26_01-00-49_exp_8/epoch_1999.pth"
+  # exps 11: 3E3D_RNN + init loss (model param + vertex) + addition + add rotation and trans to the inital pose reconstruction error
+  # ckpt_path: "/home/siyuan/research/PoseFall/train_exps/2024-02-27_00-39-56_exp_11/epoch_799.pth"
+  # exps 12: 3E3D_RNN + everyting in 11 + add human z-axis rotation augmentation
+  ckpt_path: "/home/siyuan/research/PoseFall/train_exps/2024-02-27_18-55-18_exp_12/epoch_1999.pth"
   data_path: *data_path
-  output_path: "./gen_results_exp8_RNN"
-  num_to_gen: 20
+  output_path: "./gen_results_test"
+  num_to_gen: 2
   model_type: &eval_model_type 'CVAE3E3D_RNN'
   wandb_config:
     wandb_mode: 'disabled'
