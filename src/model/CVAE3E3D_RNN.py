@@ -71,7 +71,6 @@ class CVAE3E3D_RNN(nn.Module):
             batch[f'{phase}_init_pose'] = torch.zeros_like(batch[f"{phase}_combined_poses"][:, 0, :]).to(self.device)
         else:
             batch[f'{phase}_init_pose'] = batch[f"{prev_phase}_combined_poses"][:, -1, :].to(self.device)
-            print(f'prev_phase: {prev_phase}, phase: {phase}')
         return batch
     
     def forward(self, batch):
