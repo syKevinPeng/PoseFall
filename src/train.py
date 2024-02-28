@@ -270,8 +270,6 @@ if __name__ == "__main__":
             optimizer.zero_grad()
             batch = model(batch=data_dict)
             loss, loss_dict = model.compute_loss(batch)
-            print(f' model: {model}')
-            print(f' loss: {loss}')
             # check if loss is a dict
             if isinstance(loss, list):
                 [l.backward() for l in loss]

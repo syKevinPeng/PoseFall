@@ -61,23 +61,30 @@ class CVAE3E3D_RNN(nn.Module):
         return z
     
     def prepare_batch(self, batch, phase):
-
         batch[f"{phase}_combined_poses"] = batch[f"{phase}_combined_poses"].to(self.device)
         batch[f"{phase}_label"] = batch[f"{phase}_label"].to(self.device)
         batch[f"{phase}_src_key_padding_mask"] = batch[f"{phase}_src_key_padding_mask"].to(self.device)
-        # add initial pose to the input batch
-        if phase == self.phase_names[0]:
-            batch[f'{phase}_init_pose'] = torch.zeros_like(batch[f"{phase}_combined_poses"][:, 0, :]).to(self.device)
-        else:
-            last_phase_name = self.phase_names[self.phase_names.index(phase)-1]
-            last_phase_mask = batch[f"{last_phase_name}_src_key_padding_mask"]
-            # get the index of the last 1 in the mask, which is the last frame
-            last_frame_idx = torch.where(last_phase_mask == 0)[1][-1]
-            batch[f'{phase}_init_pose'] = batch[f"{last_phase_name}_output"][:, last_frame_idx, :].to(self.device)
+        batch[f"{phase}_init_pose"] = batch[f"{phase}_init_pose"].to(self.device)
+        return batch
+    
+    def get_init_pose(self, batch):
+        for phase in self.phase_names:
+            # add initial pose to the input batch
+            if phase == self.phase_names[0]:
+                batch[f'{phase}_init_pose'] = torch.zeros_like(batch[f"{phase}_combined_poses"][:, 0, :])
+            else:
+                last_phase_name = self.phase_names[self.phase_names.index(phase)-1]
+                last_phase_mask = batch[f"{last_phase_name}_src_key_padding_mask"]
+                # get the index of the first one in the mask
+                last_frame_idx = last_phase_mask.argmax(dim=1)
+                last_frame_idx = last_frame_idx - 1# minute one to get the last frame
+                rows = torch.arange(0, last_frame_idx.size(0))
+                batch[f'{phase}_init_pose'] = batch[f"{last_phase_name}_combined_poses"][rows, last_frame_idx, :]
         return batch
     
     def forward(self, batch):
         # batch = self.prepare_batch(batch)
+        batch = self.get_init_pose(batch)
         for phase in self.phase_names:
             batch = self.prepare_batch(batch, phase)
             # Encoder

@@ -33,7 +33,6 @@ loss_config:
   # initial pose loss
   init_pose_param_loss_weight: 1
   init_pose_vertex_loss_weight: 2
-  init_pose_human_center_loss_weight : 5
 
 constant:
   PHASES:
