@@ -10,7 +10,7 @@ train_config:
   data_aug: True
 
 wandb_config:
-  wandb_mode: 'disabled'
+  wandb_mode: 'online'
   wandb_project: 'posefall'
   wandb_exp_name: *exp_name
   wandb_tags: [*train_model_type, 'train']

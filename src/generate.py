@@ -87,7 +87,7 @@ def get_model_and_dataset(args):
         dataset = FallingDataset3Phase(
             args,
             args["data_config"]["data_path"],
-            data_aug=True, # TODO: change this to False
+            data_aug=False
             max_frame_dict=args["constant"]["max_frame_dict"],
             phase=PHASES,
         )

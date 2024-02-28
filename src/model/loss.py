@@ -120,7 +120,6 @@ def compute_inter_phase_loss(phase_names,batch, loss_weights_dict):
     compute the first derivative of the joint location        
     """
 
-    # TODO: deal with the paddings
     inter_phase_loss = 0
     loss_dict = {}
     for i in range(len(phase_names)-1):
