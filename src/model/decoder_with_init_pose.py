@@ -38,7 +38,8 @@ class DecodeWithInitPose(nn.Module):
         self.input_feats = input_feature_dim
         self.njoints = njoints
         self.nfeats = nfeats
-        self.actionBiases = nn.Parameter(torch.randn(self.num_classes, self.latent_dim//2)) # modified for concatenation
+        # self.actionBiases = nn.Parameter(torch.randn(self.num_classes, self.latent_dim//2)) # modified for concatenation
+        self.actionBiases = nn.Parameter(torch.randn(self.num_classes, self.latent_dim)) # modified for concatenation
 
         self.seqTransDecoderLayer = nn.TransformerDecoderLayer(
             d_model=self.latent_dim,
@@ -54,8 +55,8 @@ class DecodeWithInitPose(nn.Module):
         self.finallayer = nn.Linear(
             in_features=self.latent_dim, out_features=self.input_feats
         )
-        self.skelEmbedding = nn.Linear(in_features=self.njoints*self.nfeats, out_features=self.latent_dim//2)# modified for concatenation
-
+        # self.skelEmbedding = nn.Linear(in_features=self.njoints*self.nfeats, out_features=self.latent_dim//2)# modified for concatenation
+        self.skelEmbedding = nn.Linear(in_features=self.njoints*self.nfeats, out_features=self.latent_dim)
 
     def forward(self, batch):
         z = batch[f"{self.phase_names}_z"]
@@ -73,8 +74,8 @@ class DecodeWithInitPose(nn.Module):
 
         # TODO experiment on the effect of adding and concatenating
         # Adding the initial pose to the latent vector
-        # z = shifted_z[None] + init_pose  # sequence of size 1
-        z = torch.concat([shifted_z[None], init_pose], dim = -1)  # sequence of size 1
+        z = shifted_z[None] + init_pose  # sequence of size 1
+        # z = torch.concat([shifted_z[None], init_pose], dim = -1)  # sequence of size 1
         timequeries = torch.zeros(nframes, bs, self.latent_dim, device=z.device)
 
         # only for ablation / not used in the final model
@@ -89,8 +90,5 @@ class DecodeWithInitPose(nn.Module):
         output[mask.T] = 0
         output = output.permute(1, 0, 2, 3)
 
-        # if self.combined:
-        #     batch["output"] = output
-        # else:
         batch[f"{self.phase_names}_output"] = output
         return batch
