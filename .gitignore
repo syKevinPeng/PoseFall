@@ -219,3 +219,4 @@ src/evaluate/recognition_ckpts_old/recognition_model_2999.pt
 src/tran_exps/*
 *pt
 *pth
+src/data_processing/client_secrets.json

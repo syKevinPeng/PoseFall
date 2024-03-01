@@ -78,7 +78,27 @@ if __name__ == "__main__":
         df[col_name] = df[col_name].str.split("_").str[1]
     # create a hash column
     df["hash"] = pd.util.hash_pandas_object(df, index=False)
-    print(df.head())
+    # print(df.head())
+
+    # upload to google drive
+    from pydrive.drive import GoogleDrive 
+    from pydrive.auth import GoogleAuth 
+    # test file upload
+    gauth = GoogleAuth() 
+    gauth.LocalWebserverAuth()
+    drive = GoogleDrive(gauth)
+
+    # destination folder id
+    folder_id = "1TSwAL4mRYKunZeDb8mBMeWcHvbFSpscp" 
+    test_file_path = "/home/siyuan/research/PoseFall/gen_results_exp14/blender_outputs/video_rendering/0000_00100010000001000000100_sequences_0.mp4"
+    test_file = drive.CreateFile({
+        "title": "test.mp4",
+        "parents": [{"kind": "drive#fileLink", "id": folder_id}]
+    })
+    test_file.SetContentFile(test_file_path)
+    test_file.Upload()
+    print(f'Uploaded {test_file_path} to Google Drive.')
+
     
 
 
