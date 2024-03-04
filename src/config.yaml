@@ -98,8 +98,7 @@ recognition_config:
     wandb_description: "STGCN only"
 
 evaluate_config:
-  evaluate_dataset_path: "/home/siyuan/research/PoseFall/gen_results_3E3D_20"
-  recognition_model_ckpt_path: "/home/siyuan/research/PoseFall/src/evaluate/recognition_ckpts/recognition_model_2999.pt"
-  phase: "glit"
+  evaluate_dataset_path: "/home/siyuan/research/PoseFall/gen_results_exp0"
+  recognition_model_ckpt_path: "/home/siyuan/research/PoseFall/src/evaluate/recognition_ckpts_branch_GRU/recognition_model_1999.pt"
   wandb_config:
     wandb_mode: 'disabled'

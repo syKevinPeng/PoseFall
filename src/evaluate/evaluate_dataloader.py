@@ -25,14 +25,16 @@ class EvaluateDataset(Dataset):
         self.data_list = sorted(list(self.data_path.glob("*.csv")))
         num_class = len(self.data_list[0].stem.split("_")[1])
         print(f"Number of classes: {num_class}")
+        self.label_seg = self.get_label_segments()
+        self.label_seg = np.array(self.label_seg)[:, 1].astype(int)
         self.recognition_model = STGCN(
             in_channels=6,
             num_class=num_class,
             graph_args={"layout": "smpl", "strategy": "spatial"},
             edge_importance_weighting=True,
+            phase_output_size=self.label_seg,
             device=DEVICE,
         ).to(DEVICE)
-        self.label_seg = self.get_label_segments()
 
     def get_label_segments(self):
         label_seg = []
