@@ -220,3 +220,11 @@ src/tran_exps/*
 *pt
 *pth
 src/data_processing/client_secrets.json
+src/data_processing/evaluation_splits/evaluation_0.csv
+src/data_processing/evaluation_splits/evaluation_1.csv
+src/data_processing/evaluation_splits/evaluation_2.csv
+src/data_processing/evaluation_splits/evaluation_3.csv
+src/data_processing/evaluation_splits/evaluation_4.csv
+src/data_processing/evaluation_splits/evaluation_5.csv
+src/data_processing/evaluation_splits/evaluation_6.csv
+src/data_processing/evaluation.csv
