@@ -125,46 +125,13 @@ def compute_inter_phase_loss(phase_names,batch, loss_weights_dict):
     for i in range(len(phase_names)-1):
         first_phase = phase_names[i]
         second_phase = phase_names[i+1]
-        pred_first_phase = batch[f"{first_phase}_output"]
+        pred_first_phase = batch[f"{first_phase}_output"] # shape: (batch_size, num_frames, num_joints, feat_dim)
         pred_second_phase = batch[f"{second_phase}_output"]
-        # take the last 10% of the first phase
-        first_phase_last_10 = int(pred_first_phase.size(1) * 0.1)
-        # take the first 10% of the second phase
-        second_phase_first_10 = int(pred_second_phase.size(1) * 0.1)
-        # concatenate the two phase
-        combined_pred = torch.cat((pred_first_phase[:, -first_phase_last_10:, :], pred_second_phase[:, :second_phase_first_10, :]), dim=1)
-        joitns_pred = combined_pred[:, :, :24, :]
-        # get the joint locations using SMPL model
-        smpl_model = SMPLModel().eval().to(DEVICE)
-        # get the vertex locations
-        _, joint_locs = smpl_model(joitns_pred)
-        # take the first 24 joints (there are only 24 joints for SMPL model but they author make it more to fit for other models)
-        joint_locs = joint_locs[:, :, :24, :]
-        # calculate the first derivative of the joint locations
-        joint_locs_diff = joint_locs[:, 1:, :, :] - joint_locs[:, :-1, :, :]
-        # calculate the variance across the time
-        joint_locs_diff_var = torch.var(joint_locs_diff, dim=1)
-        # calculate the mean of the variance
-        inter_phase_loss += torch.mean(joint_locs_diff_var)*loss_weights_dict["var_loss_weight"]
-
-        # Spline loss: calculate the different between the actual location and the interpolated location
-        # interpolated_joint_locs = scipy.interpolate.CubicSpline(
-        #     x=torch.linspace(0, 1, joint_locs.size(1)), y=joint_locs.cpu().detach().numpy(), axis=1
-        # )(torch.linspace(0, 1, joint_locs.size(1)))
-        # interpolated_joint_locs = torch.tensor(interpolated_joint_locs).to(DEVICE)
-        
-        # calculate the l2 difference between the actual location and the spline location
-        # spline_loss = F.mse_loss(joint_locs - interpolated_joint_locs))
-        last_frame_from_first_phase = pred_first_phase[:, -1, :].unsqueeze(1)
-        first_frame_from_second_phase = pred_second_phase[:, 0, :].unsqueeze(1)
-        joints_loc = torch.cat((last_frame_from_first_phase, first_frame_from_second_phase), dim=1)[:, :, :24, :]
-        _, joint_locs = smpl_model(joints_loc)
-        joint_locs = joint_locs[:, :, :24, :]
-        spline_loss = F.mse_loss(joint_locs[:, 0, ::], joint_locs[:, 1, ::])
-        inter_phase_loss += spline_loss*loss_weights_dict["loc_loss_weight"]
+        first_phase_last_frame = pred_first_phase[:, -1, :]
+        second_phase_first_frame = pred_second_phase[:, 0, :] # shape: (batch_size, num_joints, feat_dim)
+        recon_loss = vertex_loss(first_phase_last_frame[:, :26, :], second_phase_first_frame[:, :26, :], with_trans_rot=True)*loss_weights_dict["inter_phase_loss_weight"]
         loss_dict.update({
-            f"{first_phase}_{second_phase}_spline_loss": spline_loss.item()*loss_weights_dict["loc_loss_weight"],
-            f"{first_phase}_{second_phase}_var_loss": torch.mean(joint_locs_diff_var).item()*loss_weights_dict["var_loss_weight"],
+            f"{first_phase}_{second_phase}_recon_loss": recon_loss.item()*loss_weights_dict["inter_phase_loss_weight"],
         })
 
     return inter_phase_loss, loss_dict

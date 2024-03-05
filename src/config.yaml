@@ -1,9 +1,9 @@
-define: &exp_name "exp_13"
+define: &exp_name "exp_14"
 
 train_config:
   epochs: 2000
   batch_size: 20
-  model_type: &train_model_type 'CVAE3E3D_RNN' # options CVAE3E1D, CVAE3E3D, CVAE1E1D,  CVAE3E3D_RNN
+  model_type: &train_model_type 'CVAE3E3D' # options CVAE3E1D, CVAE3E3D, CVAE1E1D,  CVAE3E3D_RNN
   lr: 0.0001 #0.0001
   num_workers: 4
   model_save_freq: 200
@@ -14,7 +14,7 @@ wandb_config:
   wandb_project: 'posefall'
   wandb_exp_name: *exp_name
   wandb_tags: [*train_model_type, 'train']
-  wandb_description: "CVAE + RNN: feature combineation method: concate. Initial Pose Loss: param + reconstruction. Human Z-axis rotation augmentation added."
+  wandb_description: "CVAE3E3D model. For inter-phase loss, we use the similar reconstruction loss as the initial pose loss"
 
 data_config:
   data_path: &data_path "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
@@ -28,8 +28,7 @@ loss_config:
   vertex_loss_weight: 1
   kl_loss_weight: 0.00001
   # between-phase loss
-  loc_loss_weight: 2
-  var_loss_weight: 0.5
+  inter_phase_loss_weight: 2
   # initial pose loss
   init_pose_param_loss_weight: 1
   init_pose_vertex_loss_weight: 2
