@@ -14,7 +14,7 @@ wandb_config:
   wandb_project: 'posefall'
   wandb_exp_name: *exp_name
   wandb_tags: [*train_model_type, 'train']
-  wandb_description: "CVAE3E3D model. For inter-phase loss, we use the similar reconstruction loss as the initial pose loss"
+  wandb_description: "CVAE + RNN: feature combineation method: addition. Initial Pose Loss: param + reconstruction. Human Z-axis rotation augmentation added."
 
 data_config:
   data_path: &data_path "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
@@ -54,7 +54,7 @@ constant:
 
 generate_config:
   # 1E1D checkpoint
-  # ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240109_012926-zjoxy2jq/files/2024-01-09_01-29-27_exp_0/epoch_1999.pth"
+  ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240109_012926-zjoxy2jq/files/2024-01-09_01-29-27_exp_0/epoch_1999.pth"
   # 3E3D checkpoint   
   # ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240109_192054-obzeak8j/files/2024-01-09_19-20-55_exp_3/epoch_2999.pth"
   # ckpt_path: "/home/siyuan/research/PoseFall/train_exps/2024-02-20_01-48-06_exp_4/epoch_2999.pth"
@@ -67,10 +67,14 @@ generate_config:
   # exps 11: 3E3D_RNN + init loss (model param + vertex) + addition + add rotation and trans to the inital pose reconstruction error
   # ckpt_path: "/home/siyuan/research/PoseFall/train_exps/2024-02-27_00-39-56_exp_11/epoch_799.pth"
   # exps 12: 3E3D_RNN + everyting in 11 + add human z-axis rotation augmentation
-  ckpt_path: "/home/siyuan/research/PoseFall/train_exps/2024-02-27_18-55-18_exp_12/epoch_1999.pth"
+  # ckpt_path: "/home/siyuan/research/PoseFall/train_exps/2024-02-27_18-55-18_exp_12/epoch_1999.pth"
+  # exps 13: 3E3D_RNN + everyting in 12 + add human z-axis rotation augmentation -- official traning weights for 3E3D concate
+  # ckpt_path: "/home/siyuan/research/PoseFall/train_exps/2024-02-28_17-47-18_exp_13/epoch_1999.pth"
+  # exps 14: 3E3D_RNN + everyting in 13 + add human z-axis rotation augmentation -- official traning weights for 3E3D addition
+  ckpt_path: "/home/siyuan/research/PoseFall/train_exps/2024-02-29_23-38-24_exp_14/epoch_1999.pth"
   data_path: *data_path
-  output_path: "./gen_results_test"
-  num_to_gen: 2
+  output_path: "./gen_results_exp14"
+  num_to_gen: 5
   model_type: &eval_model_type 'CVAE3E3D_RNN'
   wandb_config:
     wandb_mode: 'disabled'
@@ -93,8 +97,7 @@ recognition_config:
     wandb_description: "STGCN only"
 
 evaluate_config:
-  evaluate_dataset_path: "/home/siyuan/research/PoseFall/gen_results_3E3D_20"
-  recognition_model_ckpt_path: "/home/siyuan/research/PoseFall/src/evaluate/recognition_ckpts/recognition_model_2999.pt"
-  phase: "glit"
+  evaluate_dataset_path: "/home/siyuan/research/PoseFall/gen_results_exp0"
+  recognition_model_ckpt_path: "/home/siyuan/research/PoseFall/src/evaluate/recognition_ckpts_branch_GRU/recognition_model_1999.pt"
   wandb_config:
     wandb_mode: 'disabled'

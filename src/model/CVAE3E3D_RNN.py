@@ -34,7 +34,8 @@ class CVAE3E3D_RNN(nn.Module):
                 f"{phase}_decoder",
                 DecodeWithInitPose(num_classes=data_config_dict[phase]["label_size"], 
                         phase_names=phase, 
-                        latent_dim=self.latent_dim*2, 
+                        # latent_dim=self.latent_dim*2, 
+                        latent_dim=self.latent_dim,
                         njoints=data_config_dict["num_joints"], 
                         nfeats=data_config_dict["feat_dim"],
                         input_feature_dim=self.num_joints*self.feat_dim)

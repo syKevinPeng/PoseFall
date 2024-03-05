@@ -54,7 +54,7 @@ class BranchModel(nn.Module):
 
 
 class STGCN(nn.Module):
-    r"""Spatial temporal graph convolutional networks.
+    """Spatial temporal graph convolutional networks.
     Args:
         in_channels (int): Number of channels in the input data
         num_class (int): Number of classes for the classification task
@@ -153,25 +153,21 @@ class STGCN(nn.Module):
         batch["features"] = x.squeeze()
 
         # RNN
-        # x = x.view(N, -1, 256)
-        # x = self.branch(x)      
+        x = x.view(N, -1, 256)
+        x = self.branch(x)      
 
         # # prediction
-        x = self.fcn(x)
-        x = x.view(x.size(0), -1)
+        # x = self.fcn(x)
+        # x = x.view(x.size(0), -1)
         batch["yhat"] = x
         return batch
     
-    # def compute_accuracy(self, yhat, ygt):
-    #     confusion = torch.zeros(self.num_class, self.num_class, dtype=int)
-    #     # yhat = batch["yhat"].max(dim=1).indices
-    #     # ygt = batch["y"].max(dim=1).indices
-    #     yhat = yhat.cpu().detach()
-    #     ygt = ygt.cpu().detach().to(torch.int64)
-    #     for label, pred in zip(ygt, yhat):
-    #         confusion[label][pred] += 1
-    #     accuracy = torch.trace(confusion)/torch.sum(confusion)
-    #     return accuracy
+    def compute_humming_score(self, yhat, ygt):
+        yhat = torch.sigmoid(yhat).round()
+        hamming = torch.sum(yhat == ygt).item()
+        batch_size, num_classes = yhat.size()
+        return hamming, batch_size * num_classes
+
     def compute_accuracy(self, yhat, ygt):
         yhat= yhat.max(dim=1).indices
         ygt = ygt.max(dim=1).indices
