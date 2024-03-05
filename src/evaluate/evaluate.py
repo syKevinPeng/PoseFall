@@ -134,7 +134,7 @@ class Evaluation:
 
         metrics["humming_score"] = corr_pred_humming / total_label_humming
         print(f'Humming score: {metrics["humming_score"]}')
-        metrics["accuracy"] = corr_pred_acc / num_acc
+        metrics["accuracy"] = corr_pred_acc / total_label_acc
         print(f'accuracy: {metrics["accuracy"]}')
         eval_activations = torch.cat(eval_activations, dim=0)
         eval_labels_list = torch.cat(eval_labels_list, dim=0)
