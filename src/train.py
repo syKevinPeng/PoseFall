@@ -198,21 +198,21 @@ def prepare_pretrain_weights(args, curr_model_weights):
                     new_pretrain_loaded_weights[key] = pretrain_loaded_weights[key]
         pretrain_loaded_weights = new_pretrain_loaded_weights
 
-    # if model_name == "CVAE3E3D_RNN" or model_name == "CVAE3E3D":
-    #     new_pretrain_loaded_weights = {}
-    #     # copy decoder weights:
-    #     for phase in PHASES:
-    #         for key in pretrain_loaded_weights.keys():
-    #             if "decoder" in key:
-    #                 # print(f"decoder Key: {key}")
-    #                 new_key = re.sub(
-    #                     r"(decoder)(?=\.)", f"{phase}_decoder", key, count=1
-    #                 )
-    #                 new_pretrain_loaded_weights[new_key] = pretrain_loaded_weights[key]
-    #                 # print(f'new key: {new_key}')
-    #             else:
-    #                 new_pretrain_loaded_weights[key] = pretrain_loaded_weights[key]
-    #     pretrain_loaded_weights = new_pretrain_loaded_weights
+    if model_name == "CVAE3E3D_RNN" or model_name == "CVAE3E3D":
+        new_pretrain_loaded_weights = {}
+        # copy decoder weights:
+        for phase in PHASES:
+            for key in pretrain_loaded_weights.keys():
+                if "decoder" in key:
+                    # print(f"decoder Key: {key}")
+                    new_key = re.sub(
+                        r"(decoder)(?=\.)", f"{phase}_decoder", key, count=1
+                    )
+                    new_pretrain_loaded_weights[new_key] = pretrain_loaded_weights[key]
+                    # print(f'new key: {new_key}')
+                else:
+                    new_pretrain_loaded_weights[key] = pretrain_loaded_weights[key]
+        pretrain_loaded_weights = new_pretrain_loaded_weights
 
     # print out weights that are not loaded
     for key in curr_model_weights.keys():

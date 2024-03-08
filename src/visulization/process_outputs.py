@@ -13,7 +13,7 @@ if not config_file.exists():
 config = yaml.safe_load(config_file.open())
 # input dir
 # input_dir = config["generate_config"]["output_path"]
-input_dir = "/home/siyuan/research/PoseFall/gen_results_exp14_with_video"
+input_dir = "/home/siyuan/research/PoseFall/gen_results_exp13_with_video"
 print(f'Loading poses from {input_dir}')
 generate_images = True
 generate_videos = False
@@ -35,12 +35,13 @@ if generate_images:
         image_files = sorted(list(output_dir.glob("frame_*.png")))
         length = len(image_files)
         # select equally spaced 15 images
-        step = length // 10
+        step = length // 15
+        image_files = image_files[:int(length*0.8)]
         selected_images = image_files[::step]
         # read selected images
         images = [imageio.imread(str(image_file)) for image_file in selected_images]
         # crop the 10% left and right margin of the image
-        margin = 0.3
+        margin = 0.2
         images = [image[:,int(image.shape[1]*margin):, :]for image in images]
         # concatenate images
         image = np.concatenate(images, axis=1)

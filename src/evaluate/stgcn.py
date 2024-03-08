@@ -182,8 +182,8 @@ class STGCN(nn.Module):
         total_num_correct = 0
         total_num = 0
         for i, attr in enumerate(attr_sizes):
-            phase_pred = batch["yhat"][i]
-            phase_gt = batch["y"][:,sum(attr_sizes[:i]): sum(attr_sizes[:i]) + attr]
+            phase_pred = batch["yhat"][i].to(torch.float32)
+            phase_gt = batch["y"][:,sum(attr_sizes[:i]): sum(attr_sizes[:i]) + attr].to(torch.float32)
             # print(f'current length: {attr} is from {sum(attr_sizes[:i])} to {sum(attr_sizes[:i]) + attr}')
             assert phase_pred.shape == phase_gt.shape
             loss = criterion(phase_pred, phase_gt)
