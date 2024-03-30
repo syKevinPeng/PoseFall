@@ -6,7 +6,7 @@
 
 ![Teasing Image](./website/teasing_img.jpeg)
 
-<iframe src='/PoseFallWeb/'></iframe>
+<iframe src='/PoseFallWeb/' style='width: 100%;height: 40rem;'></iframe>
 
 ## Objectives:
 
