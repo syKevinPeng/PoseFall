@@ -1,27 +1,37 @@
-# Generation of Novel Fall Animation with Configurable Attributes
+# Choreographing the Digital Canvas: A Machine Learning Approach to Artistic Performance
 
+### Siyuan Peng, Kate Ladenheim, Snehesh Shrestha, Cornelia Fermüller
 
 ## Training the CVAE
+
 Before training, make sure you have the correct model type in the config file. Moreover, double-check the data path under the data-config.
-``` bash
+
+```bash
 python -m src.train
 ```
+
 ## Generation
+
 ### Generate with 1E1D model
+
 Modify in the config.yaml file the following parameters:
+
 - generate_config - model_type: CVAE1E1D
 
 Run the following command in the root directory of the project:
+
 ```bash
 python -m src.generate_imgs
 ```
 
 ### Evaluate
+
 ```bash
 python -m src.evaluate.evaluate
 ```
 
 ### Visualization
+
 Before running the visulization script, which uses blender (make sure you have it installed), making sure that the input dir at the top of the script is set.
 
 ```bash

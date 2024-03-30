@@ -103,7 +103,7 @@ class Evaluation:
                 }
                 # sanity check
                 if not np.array_equal(eval_label.cpu().numpy(), gt_label):
-                    print(f"Eval label: {eval_label}")
+                    print(f"Eval label: {eval_label.cpu().numpy()}")
                     print(f"GT label: {gt_label}")
                     raise ValueError(
                         f"Labels for eval batch and GT batch are not equal."  # they have to be equal for calculating the FID score
