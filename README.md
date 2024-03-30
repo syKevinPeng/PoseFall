@@ -6,8 +6,6 @@
 
 ![Teasing Image](./website/teasing_img.jpeg)
 
-<iframe src='/PoseFallWeb/' style='width: 100%;height: 40rem;'></iframe>
-
 ## Objectives:
 
 To generate a collection of realistic, diverse and artistic human falling movements that conform to a specific set of falling attributes.
@@ -29,6 +27,10 @@ Falling Phase:
 - Falling Attribute: Release, Let go, Hinge, Surrender
 - End Position: Back, Front
 - End Shape: Extended, Crumpled
+
+## Interactive Demo
+
+<iframe src='/PoseFallWeb/' style='width: 100%;height: 40rem;'></iframe>
 
 ## Quanlitative Result
 
