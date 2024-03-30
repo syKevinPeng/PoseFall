@@ -228,3 +228,9 @@ src/data_processing/evaluation_splits/evaluation_4.csv
 src/data_processing/evaluation_splits/evaluation_5.csv
 src/data_processing/evaluation_splits/evaluation_6.csv
 src/data_processing/evaluation.csv
+src/data_processing/evaluated_scores/evaluation_0.csv
+src/data_processing/evaluated_scores/evaluation_1.csv
+src/data_processing/evaluated_scores/evaluation_2.csv
+src/data_processing/evaluated_scores/evaluation_4.csv
+src/data_processing/evaluated_scores/evaluation_5.csv
+src/data_processing/evaluated_scores/evaluation_6.csv
