@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 import functools
 
+
 def rotation_6d_to_matrix(d6: torch.Tensor) -> torch.Tensor:
     """
     Converts 6D rotation representation by Zhou et al. [1] to rotation matrix
@@ -52,7 +53,8 @@ def _index_from_letter(letter: str):
         return 1
     if letter == "Z":
         return 2
-    
+
+
 def _angle_from_tan(
     axis: str, other_axis: str, data, horizontal: bool, tait_bryan: bool
 ):
@@ -84,7 +86,9 @@ def _angle_from_tan(
     if tait_bryan:
         return torch.atan2(-data[..., i2], data[..., i1])
     return torch.atan2(data[..., i2], -data[..., i1])
-def matrix_to_euler_angles(matrix, convention: str="XYZ"):
+
+
+def matrix_to_euler_angles(matrix, convention: str = "XYZ"):
     """
     Convert rotations given as rotation matrices to Euler angles in radians.
 
@@ -126,7 +130,6 @@ def matrix_to_euler_angles(matrix, convention: str="XYZ"):
     return torch.stack(o, -1)
 
 
-
 def _axis_angle_rotation(axis: str, angle):
     """
     Return the rotation matrices for one of the rotations about an axis
@@ -139,10 +142,10 @@ def _axis_angle_rotation(axis: str, angle):
     Returns:
         Rotation matrices as tensor of shape (..., 3, 3).
 
-    Petrovich, M., Black, M. J., &amp; Varol, G. (2021). 
-    Action-conditioned 3D human motion synthesis with Transformer Vae. 
-    2021 IEEE/CVF International Conference on Computer Vision (ICCV). 
-    Retrived from https://doi.org/10.1109/iccv48922.2021.01080 
+    Petrovich, M., Black, M. J., &amp; Varol, G. (2021).
+    Action-conditioned 3D human motion synthesis with Transformer Vae.
+    2021 IEEE/CVF International Conference on Computer Vision (ICCV).
+    Retrived from https://doi.org/10.1109/iccv48922.2021.01080
     """
 
     cos = torch.cos(angle)
@@ -171,11 +174,11 @@ def euler_angles_to_matrix(euler_angles, convention: str):
 
     Returns:
         Rotation matrices as tensor of shape (..., 3, 3).
-        
-    Petrovich, M., Black, M. J., &amp; Varol, G. (2021). 
-    Action-conditioned 3D human motion synthesis with Transformer Vae. 
-    2021 IEEE/CVF International Conference on Computer Vision (ICCV). 
-    Retrived from https://doi.org/10.1109/iccv48922.2021.01080 
+
+    Petrovich, M., Black, M. J., &amp; Varol, G. (2021).
+    Action-conditioned 3D human motion synthesis with Transformer Vae.
+    2021 IEEE/CVF International Conference on Computer Vision (ICCV).
+    Retrived from https://doi.org/10.1109/iccv48922.2021.01080
     """
     if euler_angles.dim() == 0 or euler_angles.shape[-1] != 3:
         raise ValueError("Invalid input euler angles.")
@@ -189,6 +192,7 @@ def euler_angles_to_matrix(euler_angles, convention: str):
     matrices = map(_axis_angle_rotation, convention, torch.unbind(euler_angles, -1))
     return functools.reduce(torch.matmul, matrices)
 
+
 def parse_output(sequences):
     """
     Parse the output from the model
@@ -197,7 +201,7 @@ def parse_output(sequences):
     """
     batch_size, seq_len, num_joints, feature_dim = sequences.size()
     sequences = sequences.reshape(batch_size, seq_len, -1, 6)
-    if num_joints == 25: 
+    if num_joints == 25:
         # meanning bone rots + body locs
         arm_loc = sequences[:, :, -1, :3]
         bone_rot = sequences[:, :, :-1, :]
@@ -213,25 +217,56 @@ def parse_output(sequences):
         bone_rot = sequences[:, :, :-2, :]
         arm_rot = sequences[:, :, -1, :]
 
-    return {'arm_rot': arm_rot, 'arm_loc': arm_loc, 'bone_rot': bone_rot}
+    return {"arm_rot": arm_rot, "arm_loc": arm_loc, "bone_rot": bone_rot}
+
+
+def convert_binary_label_to_category(binary_str):
+    category = [
+        "Impact_loc_Arms",
+        "Impact_loc_Head",
+        "Impact_loc_Legs",
+        "Impact_loc_Torso",
+        "Impact_attr_Contraction",
+        "Impact_attr_Explosion",
+        "Impact_attr_Prick",
+        "Impact_attr_Push",
+        "Impact_attr_Shot",
+        "Glitch_attr_contort",
+        "Glitch_attr_flail",
+        "Glitch_attr_flash",
+        "Glitch_attr_freeze",
+        "Glitch_attr_shake",
+        "Glitch_attr_short",
+        "Glitch_attr_spin",
+        "Glitch_attr_stumble",
+        "Glitch_attr_stutter",
+        "Fall_Attribute_hinge",
+        "Fall_Attribute_let go",
+        "Fall_Attribute_release",
+        "Fall_Attribute_surrender",
+        "Fall_Attribute_suspend",
+    ]
+    assert len(binary_str) == len(category)
+    attrs = [category[i] for i, c in enumerate(binary_str) if c == "1"]
+    return "-".join(attrs)
+
 
 if __name__ == "__main__":
-    # test the 6D rotation conversion
-    euler_angles = torch.rand(2, 3)*2*3.1415926-3.1415926
-    # euler_angles = torch.tensor([[0.0, 0.0, 0.0]])
-    print(f'generated euler angles: {euler_angles}')
-    rotation_matrix = euler_angles_to_matrix(euler_angles, "XYZ")
-    print(f'generated rotation matrix: \n{rotation_matrix}')
-    rep_6D = matrix_to_rotation_6d(rotation_matrix)
-    print(f'6D representation: {rep_6D}')
-    # convert it back
-    rotation_matrix_2 = rotation_6d_to_matrix(rep_6D)
-    print(f'converted rotation matrix: \n{rotation_matrix_2}')
-    # convert it to euler angles
-    euler_angles_2 = matrix_to_euler_angles(rotation_matrix_2)
-    print(f'converted euler angles: {euler_angles_2}')
-    # check the difference
-    print(f'difference: {euler_angles_2 - euler_angles}')
-
-
-
+    # # test the 6D rotation conversion
+    # euler_angles = torch.rand(2, 3) * 2 * 3.1415926 - 3.1415926
+    # # euler_angles = torch.tensor([[0.0, 0.0, 0.0]])
+    # print(f"generated euler angles: {euler_angles}")
+    # rotation_matrix = euler_angles_to_matrix(euler_angles, "XYZ")
+    # print(f"generated rotation matrix: \n{rotation_matrix}")
+    # rep_6D = matrix_to_rotation_6d(rotation_matrix)
+    # print(f"6D representation: {rep_6D}")
+    # # convert it back
+    # rotation_matrix_2 = rotation_6d_to_matrix(rep_6D)
+    # print(f"converted rotation matrix: \n{rotation_matrix_2}")
+    # # convert it to euler angles
+    # euler_angles_2 = matrix_to_euler_angles(rotation_matrix_2)
+    # print(f"converted euler angles: {euler_angles_2}")
+    # # check the difference
+    # print(f"difference: {euler_angles_2 - euler_angles}")
+    result = convert_binary_label_to_category("00100010000001000000100")
+    print("-".join(result))

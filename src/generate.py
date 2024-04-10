@@ -7,6 +7,7 @@ from .model.CVAE3E3D import CVAE3E3D
 from .model.CVAE3E1D import CVAE3E1D
 from .model.CVAE1E1D import CVAE1E1D
 from .model.CVAE3E3D_RNN import CVAE3E3D_RNN
+from .data_processing.utils import convert_binary_label_to_category
 from icecream import ic
 import pandas as pd
 from .data_processing.utils import (
@@ -244,7 +245,9 @@ if __name__ == "__main__":
             }
             batch_size = input_batch["combined_label"].size(0)
             label = data_dict["combined_label"]
-        label_str = "".join([str(int(i)) for i in label[0].cpu().numpy()])
+        binary_label_str = "".join([str(int(i)) for i in label[0].cpu().numpy()])
+        cat_label_str = convert_binary_label_to_category(binary_label_str)
+        # TODO: convert binary label str to human readable label
         for i in range(generate_config["num_to_gen"]):
             genreated_batch = model.generate(input_batch)
             model_type = generate_config["model_type"]
@@ -266,10 +269,7 @@ if __name__ == "__main__":
                     )
                     whole_sequences.append(phase_output)
                 whole_sequences = torch.concat(whole_sequences, axis=1)
-            elif (
-                model_type == "CVAE3E1D"
-                or model_type == "CVAE1E1D"
-            ):
+            elif model_type == "CVAE3E1D" or model_type == "CVAE1E1D":
                 whole_sequences = genreated_batch["combined_output"]
                 whole_sequences = whole_sequences
                 # remove padding
@@ -314,7 +314,7 @@ if __name__ == "__main__":
             # save the dataframe
             df.to_csv(
                 Path(generate_config["output_path"])
-                / f"{str(idx).zfill(4)}_{label_str}_sequences_{i}.csv"
+                / f"{str(idx).zfill(4)}_{cat_label_str}_sequences_{i}.csv"
             )
             # visulization
             # frames = visulize_poses(df)

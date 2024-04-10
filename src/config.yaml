@@ -3,24 +3,23 @@ define: &exp_name "exp_14"
 train_config:
   epochs: 2000
   batch_size: 20
-  model_type: &train_model_type 'CVAE3E3D' # options CVAE3E1D, CVAE3E3D, CVAE1E1D,  CVAE3E3D_RNN
+  model_type: &train_model_type "CVAE3E3D" # options CVAE3E1D, CVAE3E3D, CVAE1E1D,  CVAE3E3D_RNN
   lr: 0.0001 #0.0001
   num_workers: 4
   model_save_freq: 200
   data_aug: True
 
 wandb_config:
-  wandb_mode: 'online'
-  wandb_project: 'posefall'
+  wandb_mode: "online"
+  wandb_project: "posefall"
   wandb_exp_name: *exp_name
-  wandb_tags: [*train_model_type, 'train']
+  wandb_tags: [*train_model_type, "train"]
   wandb_description: "CVAE + RNN: feature combineation method: addition. Initial Pose Loss: param + reconstruction. Human Z-axis rotation augmentation added."
 
 data_config:
   data_path: &data_path "/home/siyuan/research/PoseFall/data/MoCap/Mocap_processed_data"
-  pretrained_weights: "/home/siyuan/research/PoseFall/src/model/pretrained_models/uestc/checkpoint_1000.pth.tar" 
+  pretrained_weights: "/home/siyuan/research/PoseFall/src/model/pretrained_models/uestc/checkpoint_1000.pth.tar"
   ckpt_path: "/home/siyuan/research/PoseFall/train_exps"
-
 
 loss_config:
   # in-phase loss
@@ -35,16 +34,16 @@ loss_config:
 
 constant:
   PHASES:
-    - 'impa'
-    - 'glit'
-    - 'fall'
+    - "impa"
+    - "glit"
+    - "fall"
   attributes:
     impact_phase_att: # full list: ["Impact Location", "Impact Attribute", "Impact Force"]
       - "Impact Location"
       - "Impact Attribute"
     glitch_phase_att: # full list: ["Glitch Speed", "Glitch Attribute"]
       - "Glitch Attribute"
-    fall_phase_att:  # full list ["Fall Attribute","End Postion"]
+    fall_phase_att: # full list ["Fall Attribute","End Postion"]
       - "Fall Attribute"
 
   max_frame_dict:
@@ -55,7 +54,7 @@ constant:
 generate_config:
   # 1E1D checkpoint
   ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240109_012926-zjoxy2jq/files/2024-01-09_01-29-27_exp_0/epoch_599.pth"
-  # 3E3D checkpoint   
+  # 3E3D checkpoint
   # ckpt_path: "/home/siyuan/research/PoseFall/src/wandb/run-20240109_192054-obzeak8j/files/2024-01-09_19-20-55_exp_3/epoch_2999.pth"
   # ckpt_path: "/home/siyuan/research/PoseFall/train_exps/2024-02-20_01-48-06_exp_4/epoch_2999.pth"
   # exps 6: 3E3D_RNN + init loss (model param only) + addition
@@ -73,15 +72,15 @@ generate_config:
   # exps 14: 3E3D_RNN + everyting in 13 + add human z-axis rotation + addition -- official traning weights for 3E3D addition
   # ckpt_path: "/home/siyuan/research/PoseFall/train_exps/2024-02-29_23-38-24_exp_14/epoch_1999.pth"
   data_path: *data_path
-  output_path: "./gen_results_exp0_200"
-  num_to_gen: 200
-  model_type: &eval_model_type 'CVAE1E1D' # options CVAE3E1D, CVAE3E3D, CVAE1E1D,  CVAE3E3D_RNN
+  output_path: "./gen_results_exp0_2"
+  num_to_gen: 2
+  model_type: &eval_model_type "CVAE1E1D" # options CVAE3E1D, CVAE3E3D, CVAE1E1D,  CVAE3E3D_RNN
   wandb_config:
-    wandb_mode: 'disabled'
-    wandb_project: 'posefall'
+    wandb_mode: "disabled"
+    wandb_project: "posefall"
     wandb_exp_name: *exp_name
-    wandb_tags: [*eval_model_type, 'eval']
-    wandb_description:  ""
+    wandb_tags: [*eval_model_type, "eval"]
+    wandb_description: ""
 
 recognition_config:
   pretrained_weights: "/home/siyuan/research/PoseFall/src/model/pretrained_models/recognition/uestc_rot6d_stgcn.tar"
@@ -92,12 +91,12 @@ recognition_config:
   model_save_freq: 500
   evaluation_freq: 200
   wandb_config:
-    wandb_mode: 'online'
-    wandb_tags: ['recognition', 'train', ]
+    wandb_mode: "online"
+    wandb_tags: ["recognition", "train"]
     wandb_description: "STGCN only"
 
 evaluate_config:
   evaluate_dataset_path: "/home/siyuan/research/PoseFall/gen_results_exp0_200"
   recognition_model_ckpt_path: "/home/siyuan/research/PoseFall/src/evaluate/recognition_ckpts_branch_GRU/recognition_model_1999.pt"
   wandb_config:
-    wandb_mode: 'disabled'
+    wandb_mode: "disabled"
