@@ -1,6 +1,7 @@
 """
 Based on generated human pose parameter, we reconstruct the human motion in blender
 """
+
 import bpy, json
 import numpy as np
 import importlib
@@ -36,14 +37,16 @@ SMPL_JOINT_NAMES = [
     "R_Hand",
 ]
 
+
 def empty_scene():
     """
     Empty the blender scene
     """
-    bpy.ops.object.select_all(action='SELECT')
+    bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False, confirm=False)
     bpy.ops.outliner.orphans_purge()
-    
+
+
 def set_obj_location(obj_name, location):
     """
     Set the location of an object.
@@ -53,6 +56,7 @@ def set_obj_location(obj_name, location):
     obj = bpy.context.scene.objects[obj_name]
     obj.location = location
     bpy.context.view_layer.update()
+
 
 def set_obj_rotation(obj_name, rotation):
     """
@@ -64,22 +68,23 @@ def set_obj_rotation(obj_name, rotation):
     obj.rotation_euler = rotation
     bpy.context.view_layer.update()
 
+
 def set_all_local_bone_rot(armature_name, joint_list, joint_local_rot):
-    '''
+    """
     Set the local rotations of all bones in an SMPLX armature.
 
     @param armature_name: The name of the armature.
     @param joint_list: A list of joint names.
     @param joint_local_rot: A list of local rotations (as Euler angles) for each bone in the SMPLX armature.
-    '''
+    """
     # get the current smpl bone rotation
     armature = bpy.context.scene.objects[armature_name]
     for bone_name, local_rot in zip(joint_list, joint_local_rot):
         bone = armature.pose.bones[bone_name]
         # set rotation mode of the bone to euler:
-        bone.rotation_mode = 'XYZ'
-        local_rot_mat = Euler(local_rot, 'XYZ').to_matrix()
-        bone.rotation_euler = local_rot_mat.to_euler('XYZ')
+        bone.rotation_mode = "XYZ"
+        local_rot_mat = Euler(local_rot, "XYZ").to_matrix()
+        bone.rotation_euler = local_rot_mat.to_euler("XYZ")
     # Update the view layer to reflect changes
     bpy.context.view_layer.update()
 
@@ -88,29 +93,33 @@ def set_all_local_bone_rot(armature_name, joint_list, joint_local_rot):
 empty_scene()
 # Taking cmd args
 argv = sys.argv
-argv = argv[argv.index("--") + 1:]
+argv = argv[argv.index("--") + 1 :]
 input_csv_path = str(argv[0])
 output_directory = str(argv[1])
 output_format = str(argv[2])
-print(f'processing input csv file: {input_csv_path}')
-assert output_format in ['image', 'video'], "output format must be either 'image' or 'video'"
+print(f"processing input csv file: {input_csv_path}")
+assert output_format in [
+    "image",
+    "video",
+    "fbx",
+], "output format must be either 'image', 'video','fbx'"
 
 
 # Create a new SMPL armature and let it move acccording to recorded data
-bpy.data.window_managers["WinMan"].smpl_tool.smpl_gender = 'female'
+bpy.data.window_managers["WinMan"].smpl_tool.smpl_gender = "female"
 bpy.ops.scene.smpl_add_gender()
-smpl_armature = bpy.context.scene.objects['SMPL-female']
+smpl_armature = bpy.context.scene.objects["SMPL-female"]
 
 # from each frame, read the data and set the armature's rotation, location
 # load the dataset
-dataset = np.loadtxt(input_csv_path, delimiter=',', dtype=str)
+dataset = np.loadtxt(input_csv_path, delimiter=",", dtype=str)
 column_name = dataset[0]
 dataset = dataset[1:]
 # loop through each frame
 for frame in dataset:
     # convert frame number from string to int
     frame_num = frame[0].astype(float)
-    frame_num  = int(frame_num)
+    frame_num = int(frame_num)
     # set the armature's object rotation
     arm_rot = frame[1:4].astype(float)
     # arm_rot = Euler(arm_rot, 'XYZ')
@@ -128,10 +137,10 @@ for frame in dataset:
     for bone_name in SMPL_JOINT_NAMES:
         bone = smpl_armature.pose.bones[bone_name]
         bone.keyframe_insert(data_path="rotation_euler", frame=frame_num)
-        
-        
+
+
 # add camera
-camera_data = bpy.data.cameras.new(name = "camera")
+camera_data = bpy.data.cameras.new(name="camera")
 camera_obj = bpy.data.objects.new("camera", camera_data)
 bpy.context.collection.objects.link(camera_obj)
 bpy.context.scene.camera = camera_obj
@@ -142,16 +151,16 @@ camera_obj.rotation_euler = np.radians((90, 0, 90))
 
 # add lights
 # Create the light data
-light_data = bpy.data.lights.new(name='MyLight', type='POINT')
+light_data = bpy.data.lights.new(name="MyLight", type="POINT")
 
 # Create the light object
-light_object = bpy.data.objects.new(name='MyLight', object_data=light_data)
+light_object = bpy.data.objects.new(name="MyLight", object_data=light_data)
 
 # Add the light to the scene
 bpy.context.collection.objects.link(light_object)
 light_object.location = (7, 1, 0)
 # Position the light
-light_data.energy = 1000 
+light_data.energy = 1000
 
 # Save it as PNG files
 # Specify the directory to save the PNG files
@@ -161,17 +170,41 @@ if not os.path.exists(output_directory):
 # saving as image
 if output_format == "image":
     # Set render settings
-    bpy.context.scene.render.image_settings.file_format = 'PNG'
+    bpy.context.scene.render.image_settings.file_format = "PNG"
 
     # # Render each frame and save as PNG
     for frame in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
         bpy.context.scene.frame_set(frame)
-        bpy.context.scene.render.filepath = os.path.join(output_directory, f"frame_{frame:03d}.png")
+        bpy.context.scene.render.filepath = os.path.join(
+            output_directory, f"frame_{frame:03d}.png"
+        )
         bpy.ops.render.render(write_still=True)
 if output_format == "video":
     # Set render settings
-    bpy.context.scene.render.image_settings.file_format = 'FFMPEG'
-    bpy.context.scene.render.ffmpeg.format = 'MPEG4'
-    bpy.context.scene.render.ffmpeg.codec = 'H264'
-    bpy.context.scene.render.filepath = os.path.join(output_directory, "video_rendering", input_csv_path.split('/')[-1].split('.')[0] + ".mp4")
+    bpy.context.scene.render.image_settings.file_format = "FFMPEG"
+    bpy.context.scene.render.ffmpeg.format = "MPEG4"
+    bpy.context.scene.render.ffmpeg.codec = "H264"
+    bpy.context.scene.render.filepath = os.path.join(
+        output_directory,
+        "video_rendering",
+        input_csv_path.split("/")[-1].split(".")[0] + ".mp4",
+    )
     bpy.ops.render.render(animation=True)
+
+if output_format == "fbx":
+    # save as fbx file. ONLY SAVE ARMATURE
+    armature = bpy.data.objects["SMPL-female"]
+    armature.select_set(True)
+    bpy.context.view_layer.objects.active = armature
+    if not os.path.exists(os.path.join(output_directory, "fbx_files")):
+        os.makedirs(os.path.join(output_directory, "fbx_files"))
+    bpy.ops.export_scene.fbx(
+        filepath=os.path.join(
+            output_directory,
+            "fbx_files",
+            input_csv_path.split("/")[-1].split(".")[0] + ".fbx",
+        ),
+        use_selection=True,
+        object_types={"ARMATURE"},
+        add_leaf_bones=False,
+    )

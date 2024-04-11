@@ -19,7 +19,8 @@ config = yaml.safe_load(config_file.open())
 input_dir = "/home/siyuan/research/PoseFall/gen_results_exp0_2"
 print(f"Loading poses from {input_dir}")
 generate_images = False
-generate_videos = True
+generate_videos = False
+generate_fbx = True
 
 
 input_dir = Path(input_dir)
@@ -82,5 +83,23 @@ if generate_videos:
                 str(csv_file),
                 str(output_dir),
                 "video",
+            ]
+        )
+
+if generate_fbx:
+    for csv_file in tqdm(
+        all_input_files, desc="Processing files using Blender. Generate fbx"
+    ):
+        # run blender
+        subprocess.run(
+            [
+                "blender",
+                "-b",
+                "-P",
+                "render_movements.py",
+                "--",
+                str(csv_file),
+                str(output_dir),
+                "fbx",
             ]
         )
